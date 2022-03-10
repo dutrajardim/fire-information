@@ -1,0 +1,31 @@
+@startuml
+
+!include dimensions.iuml
+
+class ncdc {
+    type
+    station
+    datetime
+    volume
+}
+
+class station {
+    id
+    geometry
+    name
+    elevation
+    distance
+    adm0
+    adm1
+    adm2
+    adm3
+}
+
+ncdc .right. station
+
+station .up. shape_adm0
+station .right. shape_adm1
+station .down. shape_adm2
+station .down. shape_adm3
+
+@enduml

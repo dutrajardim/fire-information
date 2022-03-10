@@ -1,0 +1,26 @@
+@startsalt
+{
+{T!
++                                   | Table type    | Partition             | Extension
++ s3://dutrajardim-fi               | .             | .                     | .
+++ src                              | .             | .                     | .
++++ shapes                          | .             | .                     | .
+++++ gadm40                         | .             | [adm, country]        | shp
++++ firms                           | .             | .                     | .
+++++ suomi_viirs_c2                 | .             | .                     | .
++++++ archive                       | .             | year                  | csv.gz
++++ ncdc                            | .             | .                     | .
+++++ stations                       | .             | .                     | txt.gz (fwf)
+++++ ghcn                           | .             | year                  | csv.gz
+++ tables                           | .             | .                     | .
++++ shapes                          | .             | .                     | .
+++++ adm0.parquet                   | Dimension     | .                     | parquet
+++++ adm1.parquet                   | Dimension     | adm0                  | parquet
+++++ adm2.parquet                   | Dimension     | [adm0, adm1]          | parquet
+++++ adm3.parquet                   | Dimension     | [adm0, adm1]          | parquet
++++ stations                        | Dimension     | adm0                  | parquet
++++ firms.parquet                   | Fact          | [adm0, adm1, year]    | parquet
++++ precipitation.parquet           | Fact          | [adm0, adm1, year]    | parquet
+}    
+}
+@endsalt
