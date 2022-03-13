@@ -7,7 +7,7 @@ This DAG is responsible for ...
 from airflow import DAG
 
 from airflow.operators.dummy_operator import DummyOperator
-from airflow.operators import DataQualityOperator
+from operators.data_quality import DataQualityOperator
 
 
 # defining default arguments
