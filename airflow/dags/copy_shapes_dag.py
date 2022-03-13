@@ -48,13 +48,13 @@ run_quality_checks = DataQualityOperator(
                 CASE WHEN COUNT(*) > 0
                 THEN 1
                 ELSE 0 END AS error
-            FROM {{ config.table }}
+            FROM {{ params.table }}
             """,
             "expected_result": 1,
             "error_message": "The number of stored shapes is not greater than 0!",
         }
     ],
-    config={"table": "dutrajardim-fi/tables/shapes/adm3.parquet"},
+    params={"table": "dutrajardim-fi/tables/shapes/adm3.parquet"},
     dag=dag,
 )
 

@@ -19,18 +19,18 @@ class DataQualityOperator(BaseOperator):
     ui_color = "#89DA59"
 
     @apply_defaults
-    def __init__(self, dq_checks=[], config={}, *args, **kwargs):
+    def __init__(self, dq_checks=[], params={}, *args, **kwargs):
 
         # initializing inheritance
         super(DataQualityOperator, self).__init__(*args, **kwargs)
 
+        self.s3_table = params["table"]
+
+        params["table"] = "arrow_table"
+        self.params = params
+
         # defining operator properties
         self.dq_checks = dq_checks
-
-        self.s3_table = config["table"]
-
-        config["table"] = "arrow_table"
-        self.config = config
 
     def execute(self, context):
         """
