@@ -1,5 +1,3 @@
-import logging
-import s3fs
 import pyarrow.parquet as pq
 import duckdb
 
@@ -51,6 +49,6 @@ class DataQualityOperator(BaseOperator):
                 )
             )
 
-            # checking for expected value
+            # checking for expected values
             if record[0] != check["expected_result"]:
                 raise ValueError(check["error_message"])
