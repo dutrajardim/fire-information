@@ -13,22 +13,14 @@ class DataQualityOperator(BaseOperator):
         Operator used to run checks on the data.
     """
 
-    # defining jinja tamplate fields
-    template_fields = ("dq_checks",)
     # defining operator box background color
     ui_color = "#89DA59"
 
     @apply_defaults
-    def __init__(self, dq_checks=[], params={}, *args, **kwargs):
+    def __init__(self, dq_checks=[], *args, **kwargs):
 
         # initializing inheritance
         super(DataQualityOperator, self).__init__(*args, **kwargs)
-
-        self.s3_table = "dutrajardim-fi/tables/shapes/adm3.parquet"
-
-        # params["table"] = "arrow_table"
-
-        self.params = params
 
         # defining operator properties
         self.dq_checks = dq_checks
@@ -50,13 +42,12 @@ class DataQualityOperator(BaseOperator):
             }
         )
 
-        arrow_table = pq.read_table(self.s3_table, filesystem=fs)
-        con = duckdb.connect()
-
         # running tests for each test
         for order, check in enumerate(self.dq_checks):
+            arrow_table = pq.read_table(check["s3_table"], filesystem=fs)
+            con = duckdb.connect()
 
-            record = con.execute(check["check_sql"]).fetchone()
+            record = con.execute(check["check_sql"].format("arrow_table")).fetchone()
             self.log.info(
                 "Data quality check of order {} returned the value {}.".format(
                     order + 1, records[0]
