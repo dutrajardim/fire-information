@@ -24,9 +24,10 @@ class DataQualityOperator(BaseOperator):
         # initializing inheritance
         super(DataQualityOperator, self).__init__(*args, **kwargs)
 
-        # self.s3_table = params["table"]
+        self.s3_table = "dutrajardim-fi/tables/shapes/adm3.parquet"
 
         # params["table"] = "arrow_table"
+
         self.params = params
 
         # defining operator properties
