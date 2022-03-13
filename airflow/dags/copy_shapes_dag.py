@@ -40,14 +40,12 @@ start_operator = DummyOperator(task_id="Begin_execution", dag=dag)
 # creating the quality tests
 run_quality_checks = DataQualityOperator(
     task_id="Run_data_quality_checks",
+    s3fs_conn_id="local_minio_conn_id",
     dq_checks=[
         {
             "check_sql": """
-             SELECT 
-                CASE WHEN COUNT(*) > 0
-                THEN 1
-                ELSE 0 END AS error
-            FROM {}
+                SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END
+                FROM {}
             """,
             "s3_table": "dutrajardim-fi/tables/shapes/adm3.parquet",
             "expected_result": 1,

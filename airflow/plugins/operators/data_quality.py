@@ -5,6 +5,7 @@ import duckdb
 
 from airflow.models import BaseOperator
 from airflow.utils.decorators import apply_defaults
+from hooks.s3fs import S3fsHook
 
 
 class DataQualityOperator(BaseOperator):
@@ -17,13 +18,14 @@ class DataQualityOperator(BaseOperator):
     ui_color = "#89DA59"
 
     @apply_defaults
-    def __init__(self, dq_checks=[], *args, **kwargs):
+    def __init__(self, s3fs_conn_id, dq_checks=[], *args, **kwargs):
 
         # initializing inheritance
         super(DataQualityOperator, self).__init__(*args, **kwargs)
 
         # defining operator properties
         self.dq_checks = dq_checks
+        self.s3fs_conn_id = s3fs_conn_id
 
     def execute(self, context):
         """
@@ -33,18 +35,13 @@ class DataQualityOperator(BaseOperator):
         """
 
         self.log.info("Running data quality checks...")
-        fs = s3fs.S3FileSystem(
-            client_kwargs={
-                "endpoint_url": "https://minio.minio-tenant",
-                "aws_access_key_id": "admin",
-                "aws_secret_access_key": "6bd71ace-8866-407a-9bcc-714bc5753f18",
-                "verify": False,
-            }
-        )
+        s3fs = S3fsHook(conn_id=self.s3fs_conn_id)
 
         # running tests for each test
         for order, check in enumerate(self.dq_checks):
-            arrow_table = pq.read_table(check["s3_table"], filesystem=fs)
+            arrow_table = pq.read_table(
+                check["s3_table"], filesystem=s3fs.get_filesystem()
+            )
             con = duckdb.connect()
 
             record = con.execute(check["check_sql"].format("arrow_table")).fetchone()
