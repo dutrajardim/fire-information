@@ -9,6 +9,7 @@ from airflow import DAG
 
 from airflow.operators.dummy_operator import DummyOperator
 from operators.data_quality import DataQualityOperator
+from airflow.models.param import Param
 
 
 # defining default arguments
@@ -54,7 +55,7 @@ run_quality_checks = DataQualityOperator(
             "error_message": "The number of stored shapes is not greater than 0!",
         }
     ],
-    params={"table": "dutrajardim-fi/tables/shapes/adm3.parquet"},
+    params={"table": Param("dutrajardim-fi/tables/shapes/adm3.parquet")},
     dag=dag,
 )
 
