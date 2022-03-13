@@ -50,10 +50,10 @@ class DataQualityOperator(BaseOperator):
             record = con.execute(check["check_sql"].format("arrow_table")).fetchone()
             self.log.info(
                 "Data quality check of order {} returned the value {}.".format(
-                    order + 1, records[0]
+                    order + 1, record[0]
                 )
             )
 
             # checking for expected value
-            if records[0] != check["expected_result"]:
+            if record[0] != check["expected_result"]:
                 raise ValueError(check["error_message"])
