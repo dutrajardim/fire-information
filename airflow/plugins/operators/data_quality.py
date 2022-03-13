@@ -19,7 +19,7 @@ class DataQualityOperator(BaseOperator):
     ui_color = "#89DA59"
 
     @apply_defaults
-    def __init__(self, dq_checks=[], params={}, *args, **kwargs):
+    def __init__(self, dq_checks=[], config={}, *args, **kwargs):
 
         # initializing inheritance
         super(DataQualityOperator, self).__init__(*args, **kwargs)
@@ -27,10 +27,10 @@ class DataQualityOperator(BaseOperator):
         # defining operator properties
         self.dq_checks = dq_checks
 
-        self.raw_params = params
+        self.s3_table = config["table"]
 
-        params["table"] = "arrow_table"
-        self.params = params
+        config["table"] = "arrow_table"
+        self.config = config
 
     def execute(self, context):
         """
@@ -49,7 +49,7 @@ class DataQualityOperator(BaseOperator):
             }
         )
 
-        arrow_table = pq.read_table(self.raw_params["table"], filesystem=fs)
+        arrow_table = pq.read_table(self.s3_table, filesystem=fs)
         con = duckdb.connect()
 
         # running tests for each test
