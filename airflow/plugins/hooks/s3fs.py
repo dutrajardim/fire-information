@@ -15,7 +15,10 @@ class S3fsHook(BaseHook):
             "aws_secret_access_key": self.conn.password,
         }
 
+        self.log(self.conn.extra)
+        self.log(self.conn.extra_dejson)
         if self.conn.extra and "client_kwargs" in self.conn.extra_dejson:
             client_kwargs = {**client_kwargs, **self.conn.extra_dejson["client_kwargs"]}
 
+        self.log(client_kwargs)
         return s3fs.S3FileSystem(client_kwargs=client_kwargs)
