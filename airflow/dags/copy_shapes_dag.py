@@ -4,6 +4,7 @@
 This DAG is responsible for ...
 """
 
+from datetime import datetime
 from airflow import DAG
 
 from airflow.operators.dummy_operator import DummyOperator
