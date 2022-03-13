@@ -47,7 +47,7 @@ run_quality_checks = DataQualityOperator(
                 CASE WHEN COUNT(*) > 0
                 THEN 1
                 ELSE 0 END AS error
-            FROM {s3_table}
+            FROM {}
             """,
             "s3_table": "dutrajardim-fi/tables/shapes/adm3.parquet",
             "expected_result": 1,
