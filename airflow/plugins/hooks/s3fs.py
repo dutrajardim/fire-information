@@ -8,15 +8,13 @@ class S3fsHook(BaseHook):
         super(S3fsHook, self).__init__(*args, **kwargs)
         self.conn = self.get_connection(conn_id)
 
-    def get_filesystem():
+    def get_filesystem(self):
         client_kwargs = {
             "endpoint_url": self.conn.host,
             "aws_access_key_id": self.conn.login,
             "aws_secret_access_key": self.conn.password,
         }
 
-        self.log(self.conn.extra)
-        self.log(self.conn.estra_dejson)
         if self.conn.extra and "client_kwargs" in self.conn.extra_dejson:
             client_kwargs = {**client_kwargs, **self.conn.extra_dejson["client_kwargs"]}
 
