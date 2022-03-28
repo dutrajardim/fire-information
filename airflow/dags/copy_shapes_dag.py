@@ -10,6 +10,8 @@ from airflow import DAG
 from airflow.operators.dummy_operator import DummyOperator
 from airflow.operators.python_operator import PythonOperator
 from operators.data_quality import DataQualityOperator
+from operators.shapefile_to_parquet import ShapefileToParquetOperator
+from helpers import LoadDataCallables
 
 # defining default arguments
 default_args = {
@@ -35,48 +37,83 @@ dag = DAG(
 
 dag.doc_md = __doc__
 
+callables = LoadDataCallables(s3fs_conn_id="local_minio_conn_id")
+
 # creating a symbolic task to show the DAG begin
 start_operator = DummyOperator(task_id="Begin_execution", dag=dag)
 
 
-def load_data_callable():
-    m_client = get_minio_client()
-
-    # countries
-    countries_str = "BRA, ARG, PRY, URY"
-    countries = countries_str.replace(" ", "").split(",")
-
-    url_str = "https://geodata.ucdavis.edu/gadm/gadm4.0/shp/gadm40_{}_shp.zip"
-    urls = map(lambda x: url_str.format(x), countries)
-
-    s3_bucket = "dutrajardim-fi"
-
-    for url in urls:
-        with closing(urllib.request.urlopen(url)) as resource:
-            stream = io.BytesIO(resource.read())
-
-            with closing(zipfile.ZipFile(stream, "r")) as zip_archive:
-                for filename in zip_archive.namelist():
-
-                    basename = os.path.basename(filename)
-                    name, _ = os.path.splitext(basename)
-                    version, iso_country, adm_level = name.split("_")
-
-                    file_stream = io.BytesIO(zip_archive.open(filename).read())
-                    file_size = file_stream.getbuffer().nbytes
-
-                    s3_object_key = "src/shapes/%s/adm_%s/%s/%s".format(
-                        version, adm_level, iso_country, basename
-                    )
-
-                    m_client.put_object(
-                        s3_bucket, s3_object_key, file_stream, file_size
-                    )
-
-
 # load shapes from GADM site to s3
-load_data = PythonOperator(
-    task_id="Load_data_from_GADM_to_s3", python_callable=load_data_callable, dag=dag
+load_gadm_shapes = PythonOperator(
+    task_id="Load_shapes_from_GADM_to_s3",
+    python_callable=callables.gadm_shapes,
+    dag=dag,
+)
+
+shapefile_to_parquet_adm0 = ShapefileToParquetOperator(
+    task_id="Shapefile_to_parquet_adm0",
+    s3fs_conn_id="local_minio_conn_id",
+    path_shp="s3://dutrajardim-fi/src/shapes/gadm40/adm_0/*/*",
+    path_pq="s3://dutrajardim-fi/tables/shapes/adm0.parquet",
+    fields=["COUNTRY", "ID_0"],
+    transformations="""
+    SELECT geometry, ID_0 AS adm0, COUNTRY AS name
+    FROM {table}
+    """,
+    partition_cols=["adm0"],
+    dag=dag,
+)
+
+shapefile_to_parquet_adm1 = ShapefileToParquetOperator(
+    task_id="Shapefile_to_parquet_adm1",
+    s3fs_conn_id="local_minio_conn_id",
+    path_shp="s3://dutrajardim-fi/src/shapes/gadm40/adm_1/*/*",
+    path_pq="s3://dutrajardim-fi/tables/shapes/adm1.parquet",
+    fields=["ID_0", "ID_1", "NAME_1"],
+    transformations="""
+    SELECT geometry, ID_0 AS adm0, ID_1 AS adm1, NAME_1 AS name
+    FROM {table}
+    """,
+    partition_cols=["adm0"],
+    dag=dag,
+)
+
+shapefile_to_parquet_adm2 = ShapefileToParquetOperator(
+    task_id="Shapefile_to_parquet_adm2",
+    s3fs_conn_id="local_minio_conn_id",
+    path_shp="s3://dutrajardim-fi/src/shapes/gadm40/adm_2/*/*",
+    path_pq="s3://dutrajardim-fi/tables/shapes/adm2.parquet",
+    fields=["ID_0", "ID_2", "NAME_2"],
+    transformations="""
+    SELECT
+        geometry, 
+        ID_0 AS adm0,
+        REGEXP_REPLACE(ID_2, '(.*\..*)\..*', '\\1_1') AS adm1,
+        ID_2 AS adm2,
+        NAME_2 AS name
+    FROM {table}
+    """,
+    partition_cols=["adm0", "adm1"],
+    dag=dag,
+)
+
+shapefile_to_parquet_adm3 = ShapefileToParquetOperator(
+    task_id="Shapefile_to_parquet_adm3",
+    s3fs_conn_id="local_minio_conn_id",
+    path_shp="s3://dutrajardim-fi/src/shapes/gadm40/adm_3/*/*",
+    path_pq="s3://dutrajardim-fi/tables/shapes/adm3.parquet",
+    fields=["ID_0", "ID_3", "NAME_3"],
+    transformations="""
+    SELECT
+        geometry, 
+        ID_0 AS adm0,
+        REGEXP_REPLACE(ID_3, '(.*\..*)\..*\..*', '\\1_1') AS adm1,
+        ID_3 AS adm3,
+        NAME_3 AS name
+    FROM {table}
+    """,
+    partition_cols=["adm0", "adm1"],
+    dag=dag,
 )
 
 # creating the quality tests
@@ -100,5 +137,13 @@ run_quality_checks = DataQualityOperator(
 # creating a symbolic task to show the DAG end
 end_operator = DummyOperator(task_id="Stop_execution", dag=dag)
 
-start_operator >> run_quality_checks
+start_operator >> load_gadm_shapes
+load_gadm_shapes >> shapefile_to_parquet_adm0
+load_gadm_shapes >> shapefile_to_parquet_adm1
+load_gadm_shapes >> shapefile_to_parquet_adm2
+load_gadm_shapes >> shapefile_to_parquet_adm3
+shapefile_to_parquet_adm0 >> run_quality_checks
+shapefile_to_parquet_adm1 >> run_quality_checks
+shapefile_to_parquet_adm2 >> run_quality_checks
+shapefile_to_parquet_adm3 >> run_quality_checks
 run_quality_checks >> end_operator

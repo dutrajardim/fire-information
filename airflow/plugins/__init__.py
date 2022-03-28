@@ -4,11 +4,15 @@ from airflow.plugins_manager import AirflowPlugin
 
 import operators
 import hooks
+import helpers
 
 # Defining the plugin class
 class DutraPlugin(AirflowPlugin):
     name = "dutra_plugin"
     operators = [
         operators.DataQualityOperator,
+        operators.ShapefileToParquetOperator,
+        operators.SparkOnK8sAppOperator,
     ]
-    hooks = [hooks.S3fsHook]
+    hooks = [hooks.S3fsHook, hooks.KubernetesHook]
+    helpers = [helpers.LoadDataCallables, helpers.K8sTemplates]

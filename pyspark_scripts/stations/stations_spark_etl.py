@@ -2,7 +2,10 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import (expr, broadcast)
 from pyspark.sql.types import (StructType, StructField, StringType, FloatType)
+from pyspark.conf import SparkConf
 
+from sedona.register import SedonaRegistrator
+from sedona.utils import (KryoSerializer, SedonaKryoRegistrator)
 from sedona.utils.adapter import Adapter
 from sedona.core.enums import (GridType, IndexType)
 from sedona.core.spatialOperator import JoinQueryRaw
@@ -22,9 +25,6 @@ schema = StructType(
         StructField("amd3", StringType(), True),
     ]
 )
-
-sourceCrsCode = "epsg:4326"  # WGS84, the most common degree-based CRS
-targetCrsCode = "epsg:3857"  # The most common meter-based CRS
 
 
 def extract_stations_data(spark):
@@ -63,13 +63,7 @@ def extract_stations_data(spark):
         .drop("latitude")
     # fmt: on
 
-    rdd_stations = Adapter.toSpatialRdd(sdf_stations, "geometry")
-    rdd_stations.CRSTransform(
-        sourceEpsgCRSCode=sourceCrsCode, targetEpsgCRSCode=targetCrsCode
-    )
-
-    rdd_stations.analyze()
-    return rdd_stations
+    return Adapter.toSpatialRdd(sdf_stations, "geometry")
 
 
 def extract_shapes_data(spark):
@@ -78,18 +72,16 @@ def extract_shapes_data(spark):
     s3_adm2_src = "%s/tables/shapes/adm2.parquet" % bucket
     s3_adm3_src = "%s/tables/shapes/adm3.parquet" % bucket
 
-    df_adm3 = spark.read.format("parquet").load(s3_adm2_src)
-    df_adm2 = spark.read.format("parquet").load(s3_adm3_src)
+    df_adm2 = spark.read.format("parquet").load(s3_adm2_src)
+    df_adm3 = spark.read.format("parquet").load(s3_adm3_src)
 
     sdf_adm3 = df_adm3.selectExpr(
-        "id as adm3",
+        "adm3",
         "ST_GeomFromWKT(geometry) as geometry_adm3",
-        "CONCAT(CONCAT_WS('.', SLICE(SPLIT(id, '\\\\.'), 1, 3)), '_1') as adm2",
+        "CONCAT(CONCAT_WS('.', SLICE(SPLIT(adm3, '\\\\.'), 1, 3)), '_1') as adm2",
     )
 
-    sdf_adm2 = df_adm2.selectExpr(
-        "id as adm2", "ST_GeomFromWKT(geometry) as geometry_adm2"
-    )
+    sdf_adm2 = df_adm2.selectExpr("adm2", "ST_GeomFromWKT(geometry) as geometry_adm2")
 
     sdf_adm = broadcast(sdf_adm2).join(sdf_adm3, on="adm2", how="left")
     sdf_adm = sdf_adm.selectExpr(
@@ -100,18 +92,15 @@ def extract_shapes_data(spark):
         "adm3",
     )
 
-    rdd_adm = Adapter.toSpatialRdd(sdf_adm, "geometry")
-    rdd_adm.CRSTransform(
-        sourceEpsgCRSCode=sourceCrsCode, targetEpsgCRSCode=targetCrsCode
-    )
+    return Adapter.toSpatialRdd(sdf_adm, "geometry")
+
+
+def spatial_join(spark, rdd_stations, rdd_adm, max_distance=50000.0):
+    rdd_stations.CRSTransform("epsg:4326", "epsg:3857")  # transform to meters-based CRS
+    rdd_stations.analyze()
+
+    rdd_adm.CRSTransform("epsg:4326", "epsg:3857")  # transform to meters-based CRS
     rdd_adm.analyze()
-
-    return rdd_adm
-
-
-def spatial_join(rdd_stations, rdd_adm, spark):
-
-    max_distance = 50000.0
 
     rdd_circle = CircleRDD(rdd_stations, max_distance)
     rdd_circle.analyze()
@@ -131,14 +120,18 @@ def spatial_join(rdd_stations, rdd_adm, spark):
     sdf_stations_adm = Adapter.toDf(query_result, station_cols, adm_cols, spark)
 
     # fmt: off
+    # calc distance between stations and adm, 
+    # then select up to 2 nearest adm and the adm where station are,
+    # and transform spatial column to degrees-based CRS
     return sdf_stations_adm \
         .withColumn("distance", expr("ST_Distance(leftgeometry, rightgeometry)")) \
         .withColumn("station_rank", expr("RANK() OVER (PARTITION BY (adm2, adm3) ORDER BY distance)")) \
-        .where("station_rank < 4")
+        .where("station_rank < 4") \
+        .withColumn("geometry", expr("ST_Transform(leftgeometry, 'epsg:3857', 'epsg:4326')")) 
     # fmt: on
 
 
-def load_to_s3(sdf_stations_adm):
+def load_to_s3(spark, sdf_stations_adm):
 
     bucket = "s3a://dutrajardim-fi"
     s3_firms_table = "%s/tables/stations.parquet" % bucket
@@ -148,7 +141,7 @@ def load_to_s3(sdf_stations_adm):
 
     sdf_stations_adm = sdf_stations_adm.selectExpr(
         "id",
-        "ST_AsText(leftgeometry) as geometry",
+        "ST_AsText(geometry) as geometry",
         "name",
         "CAST(elevation AS FLOAT) as elevation",
         "CAST(distance AS FLOAT) as distance",
@@ -170,13 +163,18 @@ def load_to_s3(sdf_stations_adm):
 
 
 def main():
-    spark = SparkSession.builder.appName("DJ - Station Information").getOrCreate()
+    spark = SparkSession.builder.getOrCreate()
+    SedonaRegistrator.registerAll(spark)
 
     rdd_stations = extract_stations_data(spark)
     rdd_adm = extract_shapes_data(spark)
 
-    sdf_stations_adm = spatial_join(rdd_stations, rdd_adm, spark)
+    sdf_stations_adm = spatial_join(spark, rdd_stations, rdd_adm)
 
-    load_to_s3(sdf_stations_adm)
+    load_to_s3(spark, sdf_stations_adm)
 
     spark.stop()
+
+
+if __name__ == "__main__":
+    main()
