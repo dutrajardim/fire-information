@@ -52,25 +52,22 @@ def extract_stations_data(spark):
         # "substring(value, 73, 3) as gsn_flag",
         # "substring(value, 77, 3) as hcn_crn_flag",
         # "substring(value, 81, 5) as wmo_id",
-        "ST_GeomFromWKT(CONCAT('POINT (', trim(substring(value, 13, 8)), ' ', trim(substring(value, 22, 9)), ')') ) as geometry",  # flipping coordenates
+        "ST_GeomFromWKT(CONCAT('POINT (', trim(substring(value, 13, 8)), ' ', trim(substring(value, 22, 9)), ')') ) as geometry",  # flipping coordinates
         # "ST_Point(CAST(trim(substring(value, 13, 8)) AS Decimal(24,20)), CAST(trim(substring(value, 22, 9)) AS Decimal(24,20))) as geometry",
     )
 
     # remove points near poles for mercartor projection transformation
-    # fmt: off
-    sdf_stations = sdf_stations \
-        .filter("latitude > -80 and latitude < 84") \
-        .drop("latitude")
-    # fmt: on
+    sdf_stations = sdf_stations.filter("latitude > -80 and latitude < 84").drop(
+        "latitude"
+    )
 
     return Adapter.toSpatialRdd(sdf_stations, "geometry")
 
 
 def extract_shapes_data(spark):
 
-    bucket = "s3a://dutrajardim-fi"
-    s3_adm2_src = "%s/tables/shapes/adm2.parquet" % bucket
-    s3_adm3_src = "%s/tables/shapes/adm3.parquet" % bucket
+    s3_adm2_src = spark.conf.get("spark.executorEnv.S3_ADM2_SRC_PATH")
+    s3_adm3_src = spark.conf.get("spark.executorEnv.S3_ADM3_SRC_PATH")
 
     df_adm2 = spark.read.format("parquet").load(s3_adm2_src)
     df_adm3 = spark.read.format("parquet").load(s3_adm3_src)
@@ -108,7 +105,7 @@ def spatial_join(spark, rdd_stations, rdd_adm, max_distance=50000.0):
     rdd_circle.spatialPartitioning(GridType.KDBTREE)
     rdd_adm.spatialPartitioning(rdd_circle.getPartitioner())
 
-    considerBoundaryIntersection = True  # Do not only return gemeotries fully covered by each query window in rdd_circle
+    considerBoundaryIntersection = True  # Do not only return geometries fully covered by each query window in rdd_circle
     usingIndex = False
 
     query_result = JoinQueryRaw.DistanceJoinQueryFlat(
@@ -119,22 +116,26 @@ def spatial_join(spark, rdd_stations, rdd_adm, max_distance=50000.0):
     station_cols = ["id", "elevation", "name"]
     sdf_stations_adm = Adapter.toDf(query_result, station_cols, adm_cols, spark)
 
-    # fmt: off
-    # calc distance between stations and adm, 
+    # calc distance between stations and adm,
     # then select up to 2 nearest adm and the adm where station are,
     # and transform spatial column to degrees-based CRS
-    return sdf_stations_adm \
-        .withColumn("distance", expr("ST_Distance(leftgeometry, rightgeometry)")) \
-        .withColumn("station_rank", expr("RANK() OVER (PARTITION BY (adm2, adm3) ORDER BY distance)")) \
-        .where("station_rank < 4") \
-        .withColumn("geometry", expr("ST_Transform(leftgeometry, 'epsg:3857', 'epsg:4326')")) 
-    # fmt: on
+    return (
+        sdf_stations_adm.withColumn(
+            "distance", expr("ST_Distance(leftgeometry, rightgeometry)")
+        )
+        .withColumn(
+            "station_rank",
+            expr("RANK() OVER (PARTITION BY (adm2, adm3) ORDER BY distance)"),
+        )
+        .where("station_rank < 4")
+        .withColumn(
+            "geometry", expr("ST_Transform(leftgeometry, 'epsg:3857', 'epsg:4326')")
+        )
+    )
 
 
 def load_to_s3(spark, sdf_stations_adm):
-
-    bucket = "s3a://dutrajardim-fi"
-    s3_firms_table = "%s/tables/stations.parquet" % bucket
+    stations_table = spark.conf.get("spark.executorEnv.S3_STATIONS_PATH")
 
     # set dynamic mode to preserve previous month of times saved
     spark.conf.set("spark.sql.sources.partitionOverwriteMode", "static")
@@ -151,15 +152,14 @@ def load_to_s3(spark, sdf_stations_adm):
         "adm3",
     )
 
-    # fmt: off
-    sdf_stations_adm.repartition("adm0") \
-        .write \
-        .partitionBy("adm0") \
-        .option("schema", schema) \
-        .mode("overwrite") \
-        .format("parquet") \
-        .save("s3a://dutrajardim-fi/tables/stations.parquet")
-    # fmt: on
+    (
+        sdf_stations_adm.repartition("adm0")
+        .write.partitionBy("adm0")
+        .option("schema", schema)
+        .mode("overwrite")
+        .format("parquet")
+        .save(stations_table)
+    )
 
 
 def main():

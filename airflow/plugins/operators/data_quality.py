@@ -16,7 +16,9 @@ class DataQualityOperator(BaseOperator):
     ui_color = "#89DA59"
 
     @apply_defaults
-    def __init__(self, s3fs_conn_id, dq_checks=[], *args, **kwargs):
+    def __init__(
+        self, s3fs_conn_id, dq_checks=[], register_s3_tables=[], *args, **kwargs
+    ):
 
         # initializing inheritance
         super(DataQualityOperator, self).__init__(*args, **kwargs)
@@ -24,6 +26,7 @@ class DataQualityOperator(BaseOperator):
         # defining operator properties
         self.dq_checks = dq_checks
         self.s3fs_conn_id = s3fs_conn_id
+        self.register_s3_tables = register_s3_tables
 
     def execute(self, context):
         """
@@ -35,18 +38,22 @@ class DataQualityOperator(BaseOperator):
         self.log.info("Running data quality checks...")
         s3fs = S3fsHook(conn_id=self.s3fs_conn_id)
 
+        fs = s3fs.get_filesystem()
+        con = duckdb.connect(database=":memory:")
+
+        for table_name, s3_path in self.register_s3_tables:
+            paths = fs.glob(s3_path)
+            tmp_path = paths if len(paths) > 1 else paths[0]
+
+            con.register(table_name, pq.read_table(tmp_path, filesystem=fs))
+
         # running tests for each test
         for order, check in enumerate(self.dq_checks):
-            arrow_table = pq.read_table(
-                check["s3_table"], filesystem=s3fs.get_filesystem()
-            )
-            con = duckdb.connect()
 
-            record = con.execute(check["check_sql"].format("arrow_table")).fetchone()
+            record = con.execute(check["sql"].format("arrow_table")).fetchone()
             self.log.info(
-                "Data quality check of order {} returned the value {}.".format(
-                    order + 1, record[0]
-                )
+                "Data quality check of order %s returned the value %s."
+                % (order + 1, record[0])
             )
 
             # checking for expected values

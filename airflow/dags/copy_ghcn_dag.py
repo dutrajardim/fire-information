@@ -27,9 +27,9 @@ default_args = {
 
 # creating the DAG
 dag = DAG(
-    "copy_station_files_dag",
+    "copy_ghcn_files_dag",
     default_args=default_args,
-    description="Copy station files from ncdc to S3",
+    description="Copy ghcn files from ncdc to S3",
     schedule_interval="0 * * * *",
     max_active_runs=1,
     catchup=False,
@@ -41,25 +41,25 @@ dag.doc_md = __doc__
 start_operator = DummyOperator(task_id="Begin_execution", dag=dag)
 
 load_data = LoadToS3Operator(
-    task_id="Load_station_data_from_ncdc_to_s3",
+    task_id="Load_ghcn_data_from_ncdc_to_s3",
     s3fs_conn_id="local_minio_conn_id",
-    url="ftp://ftp.ncdc.noaa.gov/pub/data/ghcn/daily/ghcnd-stations.txt",
-    pathname="dutrajardim-fi/src/ncdc/stations.txt.gz",
-    gz_compress=True,
+    url="ftp://ftp.ncdc.noaa.gov/pub/data/ghcn/daily/by_year/{{ execution_date.strftime('%Y') }}.csv.gz",
+    pathname="dutrajardim-fi/src/ncdc/ghcn/{{ execution_date.strftime('%Y') }}.csv.gz",
     dag=dag,
 )
 
+
 submit_spark_app = SparkOnK8sAppOperator(
-    task_id="Submit_stations_to_parquet_spark_application",
-    name="stations-spark-script",
-    main_application_file="s3a://dutrajardim-fi/spark_scripts/stations_spark_etl.py",
+    task_id="Submit_ghcn_to_parquet_spark_application",
+    name="ghcn-spark-script",
+    main_application_file="s3a://dutrajardim-fi/spark_scripts/ghcn_spark_etl.py",
     k8s_conn_id="local_k8s_conn_id",
-    spark_app_name="DJ - Station Information",
+    spark_app_name="DJ - GHCN Information",
     s3fs_conn_id="local_minio_conn_id",
     envs=[
         ("S3_STATIONS_PATH", "s3a://dutrajardim-fi/tables/stations.parquet"),
-        ("S3_ADM2_SRC_PATH", "s3a://dutrajardim-fi/tables/shapes/adm2.parquet"),
-        ("S3_ADM3_SRC_PATH", "s3a://dutrajardim-fi/tables/shapes/adm3.parquet"),
+        ("S3_GHCN_PATH", "s3a://dutrajardim-fi/tables/ghcn.parquet"),
+        ("S3_GHCN_SRC_PATH", "s3a://dutrajardim-fi/src/ncdc/ghcn/2022.csv.gz"),
     ],
     dag=dag,
 )
@@ -72,13 +72,15 @@ run_quality_checks = DataQualityOperator(
         {
             "sql": """
                 SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END
-                FROM stations
+                FROM ghcn
             """,
             "expected_result": 1,
-            "error_message": "The number of stored stations is not greater than 0!",
+            "error_message": "The number of stored data is not greater than 0!",
         }
     ],
-    register_s3_tables=[("stations", "dutrajardim-fi/tables/stations.parquet")],
+    register_s3_tables=[
+        ("ghcn", "dutrajardim-fi/tables/ghcn.parquet/*/*/*/year=2022/*")
+    ],
     dag=dag,
 )
 

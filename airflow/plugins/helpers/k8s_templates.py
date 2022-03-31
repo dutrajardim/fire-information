@@ -76,3 +76,26 @@ class K8sTemplates:
         body["spec"]["hadoopConf"]["fs.s3a.secret.key"] = s3_conn.password
 
         return body
+
+    def get_ghcn_application_template(
+        self,
+        name="ghcn-spark-script",
+        namespace="spark-apps",
+        main_application_file="s3a://dutrajardim-fi/spark_scripts/ghcn_spark_etl.py",
+        spark_app_name="DJ - GHCN Information",
+    ):
+
+        s3_conn = BaseHook.get_connection(self.s3fs_conn_id)
+
+        body = self.default_template
+
+        body["metadata"]["namespace"] = namespace
+        body["metadata"]["name"] = name
+        body["spec"]["mainApplicationFile"] = main_application_file
+        body["spec"]["sparkConf"]["spark.app.name"] = spark_app_name
+
+        body["spec"]["hadoopConf"]["fs.s3a.endpoint"] = s3_conn.host
+        body["spec"]["hadoopConf"]["fs.s3a.access.key"] = s3_conn.login
+        body["spec"]["hadoopConf"]["fs.s3a.secret.key"] = s3_conn.password
+
+        return body

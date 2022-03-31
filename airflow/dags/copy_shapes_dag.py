@@ -11,7 +11,8 @@ from airflow.operators.dummy_operator import DummyOperator
 from airflow.operators.python_operator import PythonOperator
 from operators.data_quality import DataQualityOperator
 from operators.shapefile_to_parquet import ShapefileToParquetOperator
-from helpers import LoadDataCallables
+from operators.load_to_s3 import LoadToS3Operator
+import os
 
 # defining default arguments
 default_args = {
@@ -37,16 +38,38 @@ dag = DAG(
 
 dag.doc_md = __doc__
 
-callables = LoadDataCallables(s3fs_conn_id="local_minio_conn_id")
-
 # creating a symbolic task to show the DAG begin
 start_operator = DummyOperator(task_id="Begin_execution", dag=dag)
 
 
-# load shapes from GADM site to s3
-load_gadm_shapes = PythonOperator(
-    task_id="Load_shapes_from_GADM_to_s3",
-    python_callable=callables.gadm_shapes,
+def pathname_callable(filename, **kwargs):
+    basename = os.path.basename(filename)
+    name, _ = os.path.splitext(basename)
+    version, iso_country, adm_level = name.split("_")
+
+    return "dutrajardim-fi/src/shapes/%s/adm_%s/%s/%s" % (
+        version,
+        adm_level,
+        iso_country,
+        basename,
+    )
+
+
+load_BRA_gadm_shapes = LoadToS3Operator(
+    task_id="Load_shapes_from_BRA_GADM_to_s3",
+    s3fs_conn_id="local_minio_conn_id",
+    url="https://geodata.ucdavis.edu/gadm/gadm4.0/shp/gadm40_BRA_shp.zip",
+    pathname_callable=pathname_callable,
+    unzip=True,
+    dag=dag,
+)
+
+load_URY_gadm_shapes = LoadToS3Operator(
+    task_id="Load_shapes_from_URY_GADM_to_s3",
+    s3fs_conn_id="local_minio_conn_id",
+    url="https://geodata.ucdavis.edu/gadm/gadm4.0/shp/gadm40_URY_shp.zip",
+    pathname_callable=pathname_callable,
+    unzip=True,
     dag=dag,
 )
 
@@ -122,28 +145,32 @@ run_quality_checks = DataQualityOperator(
     s3fs_conn_id="local_minio_conn_id",
     dq_checks=[
         {
-            "check_sql": """
+            "sql": """
                 SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END
-                FROM {}
+                FROM adm3
             """,
-            "s3_table": "dutrajardim-fi/tables/shapes/adm3.parquet",
             "expected_result": 1,
             "error_message": "The number of stored shapes is not greater than 0!",
         }
     ],
+    register_s3_tables=[("adm3", "dutrajardim-fi/tables/shapes/adm3.parquet")],
     dag=dag,
 )
 
 # creating a symbolic task to show the DAG end
 end_operator = DummyOperator(task_id="Stop_execution", dag=dag)
 
-start_operator >> load_gadm_shapes
-load_gadm_shapes >> shapefile_to_parquet_adm0
-load_gadm_shapes >> shapefile_to_parquet_adm1
-load_gadm_shapes >> shapefile_to_parquet_adm2
-load_gadm_shapes >> shapefile_to_parquet_adm3
+start_operator >> load_URY_gadm_shapes
+start_operator >> load_BRA_gadm_shapes
+
+[load_BRA_gadm_shapes, load_URY_gadm_shapes] >> shapefile_to_parquet_adm0
+[load_BRA_gadm_shapes, load_URY_gadm_shapes] >> shapefile_to_parquet_adm1
+[load_BRA_gadm_shapes, load_URY_gadm_shapes] >> shapefile_to_parquet_adm2
+[load_BRA_gadm_shapes, load_URY_gadm_shapes] >> shapefile_to_parquet_adm3
+
 shapefile_to_parquet_adm0 >> run_quality_checks
 shapefile_to_parquet_adm1 >> run_quality_checks
 shapefile_to_parquet_adm2 >> run_quality_checks
 shapefile_to_parquet_adm3 >> run_quality_checks
+
 run_quality_checks >> end_operator
