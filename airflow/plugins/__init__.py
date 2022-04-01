@@ -4,7 +4,8 @@ from airflow.plugins_manager import AirflowPlugin
 
 import operators
 import hooks
-import helpers
+
+# import helpers
 
 # Defining the plugin class
 class DutraPlugin(AirflowPlugin):
@@ -16,4 +17,4 @@ class DutraPlugin(AirflowPlugin):
         operators.LoadToS3Operator,
     ]
     hooks = [hooks.S3fsHook, hooks.KubernetesHook]
-    helpers = [helpers.LoadDataCallables, helpers.K8sTemplates]
+    # helpers = [helpers.K8sTemplates]

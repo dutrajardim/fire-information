@@ -6,13 +6,15 @@ from pyspark.sql.types import (StructType, StructField, IntegerType, StringType,
 from sedona.utils.adapter import Adapter
 from sedona.core.enums import (GridType, IndexType)
 from sedona.core.spatialOperator import JoinQueryRaw
+from sedona.register import SedonaRegistrator
 # fmt: on
 
 
 schema = StructType(
     [
         StructField("geometry", StringType(), False),
-        StructField("brightness", FloatType(), True),
+        StructField("bright_ti4", FloatType(), True),
+        StructField("bright_ti5", FloatType(), True),
         StructField("frp", FloatType(), True),
         StructField("scan", FloatType(), True),
         StructField("track", FloatType(), True),
@@ -31,15 +33,13 @@ schema = StructType(
 
 def extract_firms_data(spark):
 
-    bucket = "s3a://dutrajardim-fi"
-    years_str = "2018, 2019, 2020, 2021".replace(" ", "")
-    s3_source = "%s/src/firms/suomi_viirs_c2/archive/{%s}.csv.gz" % (bucket, years_str)
-
+    s3_source = spark.conf.get("spark.executorEnv.S3_FIRMS_SRC_PATH")
     df_firms = spark.read.format("csv").option("header", "true").load(s3_source)
 
     sdf_firms = df_firms.selectExpr(
         "ST_GeomFromWKT(CONCAT('POINT(', longitude, ' ', latitude, ')')) as geometry",
-        "brightness",
+        "bright_ti4",
+        "bright_ti5",
         "frp",
         "scan",
         "track",
@@ -58,21 +58,18 @@ def extract_firms_data(spark):
 
 def extract_shapes_data(spark):
 
-    bucket = "s3a://dutrajardim-fi"
-    s3_adm2_src = "%s/tables/shapes/adm2.parquet" % bucket
-    s3_adm3_src = "%s/tables/shapes/adm3.parquet" % bucket
+    s3_adm2_src = spark.conf.get("spark.executorEnv.S3_ADM2_SRC_PATH")
+    s3_adm3_src = spark.conf.get("spark.executorEnv.S3_ADM3_SRC_PATH")
 
-    df_adm3 = spark.read.format("parquet").load(s3_adm2_src)
-    df_adm2 = spark.read.format("parquet").load(s3_adm3_src)
+    df_adm2 = spark.read.format("parquet").load(s3_adm2_src)
+    df_adm3 = spark.read.format("parquet").load(s3_adm3_src)
+
+    sdf_adm2 = df_adm2.selectExpr("adm2", "ST_GeomFromWKT(geometry) as geometry_adm2")
 
     sdf_adm3 = df_adm3.selectExpr(
-        "id as adm3",
+        "adm3",
         "ST_GeomFromWKT(geometry) as geometry_adm3",
-        "CONCAT(CONCAT_WS('.', SLICE(SPLIT(id, '\\\\.'), 1, 3)), '_1') as adm2",
-    )
-
-    sdf_adm2 = df_adm2.selectExpr(
-        "id as adm2", "ST_GeomFromWKT(geometry) as geometry_adm2"
+        "CONCAT(CONCAT_WS('.', SLICE(SPLIT(adm3, '\\\\.'), 1, 3)), '_1') as adm2",
     )
 
     sdf_adm = broadcast(sdf_adm2).join(sdf_adm3, on="adm2", how="left")
@@ -90,17 +87,17 @@ def extract_shapes_data(spark):
     return rdd_adm
 
 
-def load_to_s3(sdf_firm_adm):
+def load_to_s3(spark, sdf_firm_adm):
 
-    bucket = "s3a://dutrajardim-fi"
-    s3_firms_table = "%s/tables/firms.parquet" % bucket
+    s3_firms_table = spark.conf.get("spark.executorEnv.S3_FIRMS_PATH")
 
     # set dynamic mode to preserve previous month of times saved
     spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
 
     sdf_firm_adm = sdf_firm_adm.selectExpr(
         "ST_AsText(rightgeometry) AS geometry",
-        "CAST(brightness as FLOAT)",
+        "CAST(bright_ti4 as FLOAT)",
+        "CAST(bright_ti5 as FLOAT)",
         "CAST(frp as FLOAT)",
         "CAST(scan as FLOAT)",
         "CAST(track as FLOAT)",
@@ -126,7 +123,7 @@ def load_to_s3(sdf_firm_adm):
     # fmt: on
 
 
-def spatial_join(rdd_firms, rdd_adm):
+def spatial_join(spark, rdd_firms, rdd_adm):
     rdd_adm.spatialPartitioning(GridType.KDBTREE)
     rdd_firms.spatialPartitioning(rdd_adm.getPartitioner())
 
@@ -138,7 +135,8 @@ def spatial_join(rdd_firms, rdd_adm):
 
     adm_columns = ["adm0", "adm1", "adm2", "adm3"]
     firms_columns = [
-        "brightness",
+        "bright_ti4",
+        "bright_ti5",
         "frp",
         "scan",
         "track",
@@ -153,13 +151,18 @@ def spatial_join(rdd_firms, rdd_adm):
 
 
 def main():
-    spark = SparkSession.builder.appName("DJ - Fire Information").getOrCreate()
+    spark = SparkSession.builder.getOrCreate()
+    SedonaRegistrator.registerAll(spark)
 
     rdd_firms = extract_firms_data(spark)
     rdd_adm = extract_shapes_data(spark)
 
-    sdf_firm_adm = spatial_join(rdd_firms, rdd_adm)
+    sdf_firm_adm = spatial_join(spark, rdd_firms, rdd_adm)
 
-    load_to_s3(sdf_firm_adm)
+    load_to_s3(spark, sdf_firm_adm)
 
     spark.stop()
+
+
+if __name__ == "__main__":
+    main()

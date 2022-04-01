@@ -16,7 +16,7 @@ class LoadToS3Operator(BaseOperator):
     """
 
     # defining operator box background color
-    ui_color = "#5DB9B4"
+    ui_color = "#7545a1"
 
     template_fields = ("pathname", "url")
 
@@ -65,8 +65,9 @@ class LoadToS3Operator(BaseOperator):
                 in_stream = io.BytesIO(resource.read())
                 zip_archive = zipfile.ZipFile(in_stream, "r")
                 file_streams = [
-                    (order, filename, zip_archive.open(filename))
-                    for order, filename in enumerate(zip_archive.namelist())
+                    (filename, zip_archive.open(filename))
+                    for filename in zip_archive.namelist()
+                    if os.path.basename(filename)
                 ]
 
             # if unzip is set to False, the src_stream will be
@@ -75,7 +76,7 @@ class LoadToS3Operator(BaseOperator):
                 file_streams.append((0, url, resource))
 
             # each of the src_streams will be load to s3
-            for order, filename, src_stream in file_streams:
+            for order, (filename, src_stream) in enumerate(file_streams):
 
                 # if gz_compress is set to True, so we need
                 # to compress it before save it

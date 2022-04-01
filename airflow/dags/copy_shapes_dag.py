@@ -4,11 +4,11 @@
 This DAG is responsible for ...
 """
 
+from airflow.utils.task_group import TaskGroup
 from datetime import datetime, timedelta
 from airflow import DAG
 
 from airflow.operators.dummy_operator import DummyOperator
-from airflow.operators.python_operator import PythonOperator
 from operators.data_quality import DataQualityOperator
 from operators.shapefile_to_parquet import ShapefileToParquetOperator
 from operators.load_to_s3 import LoadToS3Operator
@@ -55,23 +55,18 @@ def pathname_callable(filename, **kwargs):
     )
 
 
-load_BRA_gadm_shapes = LoadToS3Operator(
-    task_id="Load_shapes_from_BRA_GADM_to_s3",
-    s3fs_conn_id="local_minio_conn_id",
-    url="https://geodata.ucdavis.edu/gadm/gadm4.0/shp/gadm40_BRA_shp.zip",
-    pathname_callable=pathname_callable,
-    unzip=True,
-    dag=dag,
-)
+with TaskGroup(group_id="Load_firms_data_from_nasa_to_s3", dag=dag) as load_to_s3_group:
+    for country in ["BRA", "URY"]:
+        LoadToS3Operator(
+            task_id="Load_shapes_from_%s_GADM_to_s3" % country,
+            s3fs_conn_id="local_minio_conn_id",
+            url="https://geodata.ucdavis.edu/gadm/gadm4.0/shp/gadm40_%s_shp.zip"
+            % country,
+            pathname_callable=pathname_callable,
+            unzip=True,
+            dag=dag,
+        )
 
-load_URY_gadm_shapes = LoadToS3Operator(
-    task_id="Load_shapes_from_URY_GADM_to_s3",
-    s3fs_conn_id="local_minio_conn_id",
-    url="https://geodata.ucdavis.edu/gadm/gadm4.0/shp/gadm40_URY_shp.zip",
-    pathname_callable=pathname_callable,
-    unzip=True,
-    dag=dag,
-)
 
 shapefile_to_parquet_adm0 = ShapefileToParquetOperator(
     task_id="Shapefile_to_parquet_adm0",
@@ -160,13 +155,12 @@ run_quality_checks = DataQualityOperator(
 # creating a symbolic task to show the DAG end
 end_operator = DummyOperator(task_id="Stop_execution", dag=dag)
 
-start_operator >> load_URY_gadm_shapes
-start_operator >> load_BRA_gadm_shapes
+start_operator >> load_to_s3_group
 
-[load_BRA_gadm_shapes, load_URY_gadm_shapes] >> shapefile_to_parquet_adm0
-[load_BRA_gadm_shapes, load_URY_gadm_shapes] >> shapefile_to_parquet_adm1
-[load_BRA_gadm_shapes, load_URY_gadm_shapes] >> shapefile_to_parquet_adm2
-[load_BRA_gadm_shapes, load_URY_gadm_shapes] >> shapefile_to_parquet_adm3
+load_to_s3_group >> shapefile_to_parquet_adm0
+load_to_s3_group >> shapefile_to_parquet_adm1
+load_to_s3_group >> shapefile_to_parquet_adm2
+load_to_s3_group >> shapefile_to_parquet_adm3
 
 shapefile_to_parquet_adm0 >> run_quality_checks
 shapefile_to_parquet_adm1 >> run_quality_checks
