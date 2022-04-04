@@ -1,18 +1,20 @@
 """
-# Copy Station Files
+# Copy Shape Files
 
 This DAG is responsible for ...
 """
 
+from airflow.utils.task_group import TaskGroup
 from datetime import datetime, timedelta
 from airflow import DAG
-from airflow.utils.task_group import TaskGroup
 
 from airflow.operators.dummy_operator import DummyOperator
 from operators.data_quality import DataQualityOperator
 from operators.spark_on_k8s_app import SparkOnK8sAppOperator
 from operators.load_to_s3 import LoadToS3Operator
+
 import os
+import requests
 
 # defining default arguments
 default_args = {
@@ -28,9 +30,9 @@ default_args = {
 
 # creating the DAG
 dag = DAG(
-    "copy_firms_files_dag",
+    "copy_osm_shape_files_dag",
     default_args=default_args,
-    description="Copy firms files from ncdc to S3",
+    description="Copy shape files from GADM to S3",
     schedule_interval="0 * * * *",
     max_active_runs=1,
     catchup=False,
@@ -42,42 +44,44 @@ dag.doc_md = __doc__
 start_operator = DummyOperator(task_id="Begin_execution", dag=dag)
 
 
-with TaskGroup(group_id="Load_firms_data_from_nasa_to_s3", dag=dag) as load_to_s3_group:
-    for year in ["2020", "2021"]:
-        pathname_callable = (
-            lambda filename, year=year, **kwargs: "dutrajardim-fi/src/firms/suomi_viirs_c2/archive/%s/%s.gz"
-            % (year, os.path.basename(filename))
-        )
+with TaskGroup(group_id="Load_osm_files_to_s3", dag=dag) as load_to_s3_group:
 
-        task = LoadToS3Operator(
-            task_id=f"Load_firms_data_from_nasa_to_s3-{year}",
+    api_key = "0c8ebd61aff7ea97178ec2ee8936aea1"
+    srid = "4326"
+    file_format = "EWKT"
+    db = "osm20220207"
+    min_admin_level = 2
+    max_admin_level = 8
+
+    countries = {"BRA": "-59470", "ARG": "-286393"}
+
+    # brazil id = , argentina id = -286393
+    for name_iso, country_osm_id in countries.items():
+        url = f"https://osm-boundaries.com/Download/Submit?apiKey={api_key}&db={db}&osmIds={country_osm_id}&recursive&minAdminLevel={min_admin_level}&maxAdminLevel={max_admin_level}&format={file_format}&srid={srid}"
+
+        LoadToS3Operator(
+            task_id=f"Load_shapes_from_osm_{name_iso}_{min_admin_level}_{max_admin_level}_to_s3",
             s3fs_conn_id="local_minio_conn_id",
-            url=f"https://firms.modaps.eosdis.nasa.gov/data/country/zips/viirs-snpp_{year}_all_countries.zip",
-            pathname_callable=pathname_callable,
-            unzip=True,
-            gz_compress=True,
+            url=url,
+            pathname=f"dutrajardim-fi/src/shapes/osm/adm_{min_admin_level}_{max_admin_level}/{name_iso}.{file_format.lower()}.gz",
             dag=dag,
         )
 
 
 submit_spark_app = SparkOnK8sAppOperator(
-    task_id="Submit_firms_to_parquet_spark_application",
-    name="firms-spark-script",
-    main_application_file="s3a://dutrajardim-fi/spark_scripts/firms_spark_etl.py",
+    task_id="Submit_osm_shapes_application",
+    name="shapes-spark-script",
+    main_application_file="s3a://dutrajardim-fi/spark_scripts/shapes_spark_etl.py",
     k8s_conn_id="local_k8s_conn_id",
-    spark_app_name="DJ - FIRMS Information",
+    spark_app_name="DJ - Shapes Information",
     s3fs_conn_id="local_minio_conn_id",
     envs=[
-        ("S3_FIRMS_PATH", "s3a://dutrajardim-fi/tables/firms.parquet"),
+        ("S3_OSM_SHAPES_PATH", "s3a://dutrajardim-fi/tables/shapes/osm/shapes.parquet"),
         (
-            "S3_FIRMS_SRC_PATH",
-            "s3a://dutrajardim-fi/src/firms/suomi_viirs_c2/archive/{2021,2022}",
+            "S3_OSM_SHAPES_RELATIONS_PATH",
+            "s3a://dutrajardim-fi/tables/shapes/osm/relations.parquet",
         ),
-        (
-            "S3_SHAPES_PATH",
-            "s3a://dutrajardim-fi/tables/shapes/osm/shapes.parquet/adm=8",
-        ),
-        ("ADM_LEVEL", "8"),
+        ("S3_OSM_SHAPES_SRC_PATH", "s3a://dutrajardim-fi/src/shapes/osm/*/*"),
     ],
     dag=dag,
 )
@@ -90,14 +94,14 @@ run_quality_checks = DataQualityOperator(
         {
             "sql": """
                 SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END
-                FROM firms
+                FROM shapes
             """,
             "expected_result": 1,
-            "error_message": "The number of stored data is not greater than 0!",
+            "error_message": "The number of stored shapes is not greater than 0!",
         }
     ],
     register_s3_tables=[
-        ("firms", "s3a://dutrajardim-fi/tables/firms.parquet/year=2021/*/*")
+        ("shapes", "dutrajardim-fi/tables/shapes/osm/shapes.parquet/adm=2")
     ],
     dag=dag,
 )

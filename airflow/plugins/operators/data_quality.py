@@ -36,9 +36,9 @@ class DataQualityOperator(BaseOperator):
         ]
 
         Args:
-            s3fs_conn_id (s3): airflow connection of the type S3
+            s3fs_conn_id (string): airflow connection of the type S3
             dq_checks (list): list of dicts with the params sql, expected_result and error_message.
-            register_s3_tables (list, optional): list of tables referenced in the sql statement.
+            register_s3_tables (list, optional): list of tables referenced in the sql statement. Default value is a empty list
         """
 
         # initializing inheritance

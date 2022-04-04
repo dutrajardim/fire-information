@@ -12,7 +12,9 @@ from airflow.operators.dummy_operator import DummyOperator
 from operators.data_quality import DataQualityOperator
 from operators.shapefile_to_parquet import ShapefileToParquetOperator
 from operators.load_to_s3 import LoadToS3Operator
+
 import os
+import requests
 
 # defining default arguments
 default_args = {
@@ -45,92 +47,87 @@ start_operator = DummyOperator(task_id="Begin_execution", dag=dag)
 def pathname_callable(filename, **kwargs):
     basename = os.path.basename(filename)
     name, _ = os.path.splitext(basename)
-    version, iso_country, adm_level = name.split("_")
+    src, iso_country, adm_level = name.split("-")
 
-    return "dutrajardim-fi/src/shapes/%s/adm_%s/%s/%s" % (
-        version,
-        adm_level,
+    return "dutrajardim-fi/src/shapes/geo_boundaries/adm_%s/%s/%s" % (
+        adm_level[-1],
         iso_country,
         basename,
     )
 
 
-with TaskGroup(group_id="Load_firms_data_from_nasa_to_s3", dag=dag) as load_to_s3_group:
+def unzip_filter(filename):
+    basename = os.path.basename(filename)
+    _, extension = os.path.splitext(basename)
+
+    return extension in [".shp", ".shx", ".dbf"] and "simplified" not in basename
+
+
+with TaskGroup(group_id="Load_gadm_files_to_s3", dag=dag) as load_to_s3_group:
+
     for country in ["BRA", "URY"]:
-        LoadToS3Operator(
-            task_id="Load_shapes_from_%s_GADM_to_s3" % country,
-            s3fs_conn_id="local_minio_conn_id",
-            url="https://geodata.ucdavis.edu/gadm/gadm4.0/shp/gadm40_%s_shp.zip"
-            % country,
-            pathname_callable=pathname_callable,
-            unzip=True,
-            dag=dag,
+        r = requests.get(
+            "https://www.geoboundaries.org/api/current/gbOpen/%s/ALL" % country
         )
 
+        for adm in r.json():
+
+            LoadToS3Operator(
+                task_id="Load_shapes_from_gb_%s__to_s3" % adm["boundaryID"],
+                s3fs_conn_id="local_minio_conn_id",
+                url=adm["downloadURL"],
+                pathname_callable=pathname_callable,
+                unzip=True,
+                unzip_filter=unzip_filter,
+                dag=dag,
+            )
+
+
+common_config = {
+    "select_expr": (
+        "geometry",
+        "shapeID AS id",
+        "shapeName AS name",
+        "shapeGroup as group",
+    ),
+}
 
 shapefile_to_parquet_adm0 = ShapefileToParquetOperator(
     task_id="Shapefile_to_parquet_adm0",
     s3fs_conn_id="local_minio_conn_id",
-    path_shp="s3://dutrajardim-fi/src/shapes/gadm40/adm_0/*/*",
-    path_pq="s3://dutrajardim-fi/tables/shapes/adm0.parquet",
-    fields=["COUNTRY", "ID_0"],
-    transformations="""
-    SELECT geometry, ID_0 AS adm0, COUNTRY AS name
-    FROM {table}
-    """,
-    partition_cols=["adm0"],
+    path_shp="s3://dutrajardim-fi/src/shapes/geo_boundaries/adm_0/*/*",
+    path_pq="s3://dutrajardim-fi/tables/shapes/geo_boundaries/adm0.parquet",
+    **common_config,
     dag=dag,
 )
 
 shapefile_to_parquet_adm1 = ShapefileToParquetOperator(
     task_id="Shapefile_to_parquet_adm1",
     s3fs_conn_id="local_minio_conn_id",
-    path_shp="s3://dutrajardim-fi/src/shapes/gadm40/adm_1/*/*",
-    path_pq="s3://dutrajardim-fi/tables/shapes/adm1.parquet",
-    fields=["ID_0", "ID_1", "NAME_1"],
-    transformations="""
-    SELECT geometry, ID_0 AS adm0, ID_1 AS adm1, NAME_1 AS name
-    FROM {table}
-    """,
-    partition_cols=["adm0"],
+    path_shp="s3://dutrajardim-fi/src/shapes/geo_boundaries/adm_1/*/*",
+    path_pq="s3://dutrajardim-fi/tables/shapes/geo_boundaries/adm1.parquet",
+    **common_config,
+    partition_cols=["group"],
     dag=dag,
 )
 
 shapefile_to_parquet_adm2 = ShapefileToParquetOperator(
     task_id="Shapefile_to_parquet_adm2",
     s3fs_conn_id="local_minio_conn_id",
-    path_shp="s3://dutrajardim-fi/src/shapes/gadm40/adm_2/*/*",
-    path_pq="s3://dutrajardim-fi/tables/shapes/adm2.parquet",
-    fields=["ID_0", "ID_2", "NAME_2"],
-    transformations="""
-    SELECT
-        geometry, 
-        ID_0 AS adm0,
-        REGEXP_REPLACE(ID_2, '(.*\..*)\..*', '\\1_1') AS adm1,
-        ID_2 AS adm2,
-        NAME_2 AS name
-    FROM {table}
-    """,
-    partition_cols=["adm0", "adm1"],
+    path_shp="s3://dutrajardim-fi/src/shapes/geo_boundaries/adm_2/*/*",
+    path_pq="s3://dutrajardim-fi/tables/shapes/geo_boundaries/adm2.parquet",
+    **common_config,
+    partition_cols=["group"],
     dag=dag,
 )
 
 shapefile_to_parquet_adm3 = ShapefileToParquetOperator(
     task_id="Shapefile_to_parquet_adm3",
     s3fs_conn_id="local_minio_conn_id",
-    path_shp="s3://dutrajardim-fi/src/shapes/gadm40/adm_3/*/*",
-    path_pq="s3://dutrajardim-fi/tables/shapes/adm3.parquet",
-    fields=["ID_0", "ID_3", "NAME_3"],
-    transformations="""
-    SELECT
-        geometry, 
-        ID_0 AS adm0,
-        REGEXP_REPLACE(ID_3, '(.*\..*)\..*\..*', '\\1_1') AS adm1,
-        ID_3 AS adm3,
-        NAME_3 AS name
-    FROM {table}
-    """,
-    partition_cols=["adm0", "adm1"],
+    path_shp="s3://dutrajardim-fi/src/shapes/geo_boundaries/adm_3/*/*",
+    path_pq="s3://dutrajardim-fi/tables/shapes/geo_boundaries/adm3.parquet",
+    **common_config,
+    partition_cols=["group"],
     dag=dag,
 )
 
@@ -142,13 +139,15 @@ run_quality_checks = DataQualityOperator(
         {
             "sql": """
                 SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END
-                FROM adm3
+                FROM adm2
             """,
             "expected_result": 1,
             "error_message": "The number of stored shapes is not greater than 0!",
         }
     ],
-    register_s3_tables=[("adm3", "dutrajardim-fi/tables/shapes/adm3.parquet")],
+    register_s3_tables=[
+        ("adm2", "dutrajardim-fi/tables/shapes/geo_boundaries/adm2.parquet")
+    ],
     dag=dag,
 )
 
