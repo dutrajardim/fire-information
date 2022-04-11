@@ -5,6 +5,7 @@ This DAG is responsible for ...
 """
 
 from airflow import DAG
+from airflow.utils.task_group import TaskGroup
 from airflow.operators.dummy_operator import DummyOperator
 from operators.data_quality import DataQualityOperator
 from operators.spark_on_k8s_app import SparkOnK8sAppOperator
@@ -27,9 +28,9 @@ default_args = {
 
 # creating the DAG
 dag = DAG(
-    "copy_ghcn_files_dag",
+    "copy_historical_ghcn_files_dag",
     default_args=default_args,
-    description="Copy ghcn files from ncdc to S3",
+    description="Copy historical ghcn files from ncdc to S3",
     schedule_interval="0 * * * *",
     max_active_runs=1,
     catchup=False,
@@ -40,13 +41,17 @@ dag.doc_md = __doc__
 # creating a symbolic task to show the DAG begin
 start_operator = DummyOperator(task_id="Begin_execution", dag=dag)
 
-load_data = LoadToS3Operator(
-    task_id="Load_ghcn_data_from_ncdc_to_s3",
-    s3fs_conn_id="local_minio_conn_id",
-    url="ftp://ftp.ncdc.noaa.gov/pub/data/ghcn/daily/by_year/{{ execution_date.strftime('%Y') }}.csv.gz",
-    pathname="dutrajardim-fi/src/ncdc/ghcn/{{ execution_date.strftime('%Y') }}.csv.gz",
-    dag=dag,
-)
+
+with TaskGroup(group_id="Load_firms_data_from_nasa_to_s3", dag=dag) as load_to_s3_group:
+    for year in range(2015, datetime.now().year):
+
+        LoadToS3Operator(
+            task_id=f"Load_ghcn_data_{year}_from_ncdc_to_s3",
+            s3fs_conn_id="local_minio_conn_id",
+            url=f"ftp://ftp.ncdc.noaa.gov/pub/data/ghcn/daily/by_year/{year}.csv.gz",
+            pathname=f"dutrajardim-fi/src/ncdc/ghcn/{year}.csv.gz",
+            dag=dag,
+        )
 
 cur_dirname = os.path.dirname(os.path.realpath(__file__))
 spark_script_path = os.path.join(cur_dirname, "pyspark_scripts", "ghcn_spark_etl.py")
@@ -59,7 +64,6 @@ script_to_s3 = LoadToS3Operator(
     dag=dag,
 )
 
-
 submit_spark_app = SparkOnK8sAppOperator(
     task_id="Submit_ghcn_to_parquet_spark_application",
     name="ghcn-spark-script",
@@ -68,11 +72,11 @@ submit_spark_app = SparkOnK8sAppOperator(
     spark_app_name="DJ - GHCN Information",
     s3fs_conn_id="local_minio_conn_id",
     envs=[
-        ("S3_STATIONS_PATH", "s3a://dutrajardim-fi/tables/stations/osm_adm8.parquet"),
-        ("S3_GHCN_PATH", "s3a://dutrajardim-fi/tables/ghcn/osm_adm8.parquet"),
+        ("S3_STATIONS_PATH", "s3a://dutrajardim-fi/tables/stations/osm_amd8.parquet"),
+        ("S3_GHCN_PATH", "s3a://dutrajardim-fi/tables/ghcn/osm_amd8.parquet"),
         (
             "S3_GHCN_SRC_PATH",
-            "s3a://dutrajardim-fi/src/ncdc/ghcn/{{ execution_date.strftime('%Y') }}.csv.gz",
+            "s3a://dutrajardim-fi/src/ncdc/ghcn/*",
         ),
     ],
     dag=dag,
@@ -91,7 +95,7 @@ run_quality_checks = DataQualityOperator(
     register_s3_tables=[
         (
             "ghcn",
-            "dutrajardim-fi/tables/ghcn/osm_adm8.parquet/*/year={{ execution_date.strftime('%Y') }}/*/*",
+            "dutrajardim-fi/tables/ghcn/osm_adm8.parquet/*/*/*/*",
         )
     ],
     dag=dag,
@@ -100,7 +104,7 @@ run_quality_checks = DataQualityOperator(
 # creating a symbolic task to show the DAG end
 end_operator = DummyOperator(task_id="Stop_execution", dag=dag)
 
-start_operator >> [load_data, script_to_s3]
-[load_data, script_to_s3] >> submit_spark_app
+start_operator >> [load_to_s3_group, script_to_s3]
+[load_to_s3_group, script_to_s3] >> submit_spark_app
 submit_spark_app >> run_quality_checks
 run_quality_checks >> end_operator

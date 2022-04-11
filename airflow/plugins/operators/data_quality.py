@@ -14,8 +14,19 @@ class DataQualityOperator(BaseOperator):
     # defining operator box background color
     ui_color = "#89DA59"
 
+    template_fields = ("register_s3_tables", "sql", "s3fs_conn_id")
+
     @apply_defaults
-    def __init__(self, s3fs_conn_id, dq_checks, register_s3_tables=[], *args, **kwargs):
+    def __init__(
+        self,
+        s3fs_conn_id,
+        sql,
+        error_message="Error during quality test",
+        expected_result=1,
+        register_s3_tables=[],
+        *args,
+        **kwargs
+    ):
         """
         This function is responsible for instantiating a DataQualityOperator object.
         As the operator object is executed, all data quality check listed in dq_checks arg
@@ -45,7 +56,9 @@ class DataQualityOperator(BaseOperator):
         super(DataQualityOperator, self).__init__(*args, **kwargs)
 
         # defining operator properties
-        self.dq_checks = dq_checks
+        self.sql = sql
+        self.expected_result = expected_result
+        self.error_message = error_message
         self.s3fs_conn_id = s3fs_conn_id
         self.register_s3_tables = register_s3_tables
 
@@ -77,15 +90,9 @@ class DataQualityOperator(BaseOperator):
 
             con.register(table_name, pq.read_table(tmp_path, filesystem=fs))
 
-        # running tests for each quality check
-        for order, check in enumerate(self.dq_checks):
+        record = con.execute(self.sql).fetchone()
+        self.log.info("Data quality check returned the value %s." % record[0])
 
-            record = con.execute(check["sql"].format("arrow_table")).fetchone()
-            self.log.info(
-                "Data quality check of order %s returned the value %s."
-                % (order + 1, record[0])
-            )
-
-            # checking for expected values
-            if record[0] != check["expected_result"]:
-                raise ValueError(check["error_message"])
+        # checking for expected values
+        if record[0] != self.expected_result:
+            raise ValueError(self.error_message)

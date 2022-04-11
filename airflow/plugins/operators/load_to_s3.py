@@ -1,4 +1,5 @@
 from airflow.models import BaseOperator
+from airflow.exceptions import AirflowSkipException
 from airflow.utils.decorators import apply_defaults
 from hooks.s3fs import S3fsHook
 
@@ -19,7 +20,7 @@ class LoadToS3Operator(BaseOperator):
     # defining operator box background color
     ui_color = "#7545a1"
 
-    template_fields = ("pathname", "url")
+    template_fields = ("pathname", "url", "s3fs_conn_id")
 
     @apply_defaults
     def __init__(
@@ -30,6 +31,7 @@ class LoadToS3Operator(BaseOperator):
         pathname_callable=lambda x: x,
         gz_compress=False,
         unzip=False,
+        headers={"User-Agent": "Mozilla/6.0"},
         unzip_filter=lambda filename: os.path.basename(filename),
         *args,
         **kwargs,
@@ -61,6 +63,7 @@ class LoadToS3Operator(BaseOperator):
         self.gz_compress = gz_compress
         self.unzip = unzip
         self.unzip_filter = unzip_filter
+        self.headers = headers
 
     def execute(self, context):
         """
@@ -75,7 +78,7 @@ class LoadToS3Operator(BaseOperator):
 
         url = self.url
         self.log.info(f"Downloading from: {url}")
-        req = Request(url, headers={"User-Agent": "Mozilla/6.0"})
+        req = Request(url, headers=self.headers)
 
         with closing(urlopen(req)) as resource:
 

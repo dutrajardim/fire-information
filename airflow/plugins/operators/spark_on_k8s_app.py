@@ -6,6 +6,7 @@ from airflow.hooks.base import BaseHook
 import kubernetes.watch
 import datetime
 import json
+import functools
 
 
 class SparkOnK8sAppOperator(BaseOperator):
@@ -16,6 +17,8 @@ class SparkOnK8sAppOperator(BaseOperator):
     # defining operator box background color
     ui_color = "#F39480"
 
+    template_fields = ("s3fs_conn_id", "arguments", "main_application_file")
+
     @apply_defaults
     def __init__(
         self,
@@ -25,8 +28,10 @@ class SparkOnK8sAppOperator(BaseOperator):
         spark_app_name="DJ - Spark Application",
         s3fs_conn_id="",
         envs=[],
+        arguments=[],
         timeout_seconds=0,
         wait_timeout_seconds=25,
+        log_path="s3a://spark-logs/events",
         *args,
         **kwargs
     ):
@@ -34,31 +39,42 @@ class SparkOnK8sAppOperator(BaseOperator):
         # initializing inheritance
         super(SparkOnK8sAppOperator, self).__init__(*args, **kwargs)
 
-        # defining operator template properties
-        self.template["metadata"]["name"] = name
-        self.template["spec"]["mainApplicationFile"] = main_application_file
-        self.template["spec"]["sparkConf"]["spark.app.name"] = spark_app_name
+        # defining others properties
+        self.name = name
+        self.main_application_file = main_application_file
+        self.spark_app_name = spark_app_name
+        self.log_path = log_path
+        self.arguments = arguments
+        self.k8s_conn_id = k8s_conn_id
+        self.timeout_seconds = timeout_seconds
+        self.wait_timeout_seconds = wait_timeout_seconds
+        self.s3fs_conn_id = s3fs_conn_id
 
-        for (env_name, env_value) in envs:
-            spark_prop = "spark.executorEnv.%s" % env_name
-            self.template["spec"]["sparkConf"][spark_prop] = env_value
+    def _template_config(self):
 
-        if s3fs_conn_id:
-            s3_conn = BaseHook.get_connection(s3fs_conn_id)
+        self.template["spec"]["arguments"] = functools.reduce(
+            lambda acc, cur: [*acc, *cur], self.arguments, []
+        )
+
+        self.template["metadata"]["name"] = self.name
+        self.template["spec"]["mainApplicationFile"] = self.main_application_file
+        self.template["spec"]["sparkConf"]["spark.app.name"] = self.spark_app_name
+        self.template["spec"]["sparkConf"]["spark.eventLog.dir"] = self.log_path
+
+        if self.s3fs_conn_id:
+            s3_conn = BaseHook.get_connection(self.s3fs_conn_id)
 
             self.template["spec"]["hadoopConf"]["fs.s3a.endpoint"] = s3_conn.host
             self.template["spec"]["hadoopConf"]["fs.s3a.access.key"] = s3_conn.login
             self.template["spec"]["hadoopConf"]["fs.s3a.secret.key"] = s3_conn.password
 
-        # defining others properties
-        self.k8s_conn_id = k8s_conn_id
-        self.timeout_seconds = timeout_seconds
-        self.wait_timeout_seconds = wait_timeout_seconds
-
     def execute(self, context):
         """
         Description:
         """
+
+        self._template_config()
+
         k8s_hook = KubernetesHook(conn_id=self.k8s_conn_id)
         custom_object_api = k8s_hook.get_custom_object_api()
 

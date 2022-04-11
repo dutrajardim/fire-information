@@ -1,3 +1,3 @@
-# from helpers.k8s_templates import K8sTemplates
+from helpers.emr_templates import EmrTemplates
 
-# __all__ = ["K8sTemplates"]
+__all__ = ["EmrTemplates"]

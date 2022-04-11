@@ -5,9 +5,7 @@ This DAG is responsible for ...
 """
 
 from airflow.utils.task_group import TaskGroup
-from datetime import datetime, timedelta
 from airflow import DAG
-
 from airflow.operators.dummy_operator import DummyOperator
 from operators.data_quality import DataQualityOperator
 from operators.shapefile_to_parquet import ShapefileToParquetOperator
@@ -15,6 +13,7 @@ from operators.load_to_s3 import LoadToS3Operator
 
 import os
 import requests
+from datetime import datetime, timedelta
 
 # defining default arguments
 default_args = {
@@ -36,6 +35,7 @@ dag = DAG(
     schedule_interval="0 * * * *",
     max_active_runs=1,
     catchup=False,
+    params={"s3fs_conn_id": "aws_s3_conn_id"},
 )
 
 dag.doc_md = __doc__
@@ -74,7 +74,7 @@ with TaskGroup(group_id="Load_gadm_files_to_s3", dag=dag) as load_to_s3_group:
 
             LoadToS3Operator(
                 task_id="Load_shapes_from_gb_%s__to_s3" % adm["boundaryID"],
-                s3fs_conn_id="local_minio_conn_id",
+                s3fs_conn_id="{{ params.s3fs_conn_id }}",
                 url=adm["downloadURL"],
                 pathname_callable=pathname_callable,
                 unzip=True,
@@ -94,7 +94,7 @@ common_config = {
 
 shapefile_to_parquet_adm0 = ShapefileToParquetOperator(
     task_id="Shapefile_to_parquet_adm0",
-    s3fs_conn_id="local_minio_conn_id",
+    s3fs_conn_id="{{ params.s3fs_conn_id }}",
     path_shp="s3://dutrajardim-fi/src/shapes/geo_boundaries/adm_0/*/*",
     path_pq="s3://dutrajardim-fi/tables/shapes/geo_boundaries/adm0.parquet",
     **common_config,
@@ -135,16 +135,12 @@ shapefile_to_parquet_adm3 = ShapefileToParquetOperator(
 run_quality_checks = DataQualityOperator(
     task_id="Run_data_quality_checks",
     s3fs_conn_id="local_minio_conn_id",
-    dq_checks=[
-        {
-            "sql": """
-                SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END
-                FROM adm2
-            """,
-            "expected_result": 1,
-            "error_message": "The number of stored shapes is not greater than 0!",
-        }
-    ],
+    sql="""
+        SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END
+        FROM adm2
+    """,
+    expected_result=1,
+    error_message="The number of stored shapes is not greater than 0!",
     register_s3_tables=[
         ("adm2", "dutrajardim-fi/tables/shapes/geo_boundaries/adm2.parquet")
     ],
