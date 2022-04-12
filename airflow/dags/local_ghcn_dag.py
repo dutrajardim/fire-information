@@ -1,13 +1,11 @@
 """
-# Station Files ETL
+# Copy Station Files
 
-This DAG is responsible for copying remote stations data from ncdc
-to s3 and then create parquet table joining information about
-in which administrative area (contry, city...) the station
-is located.
+This DAG is responsible for extracts s3 ghcn data loaded from ncdc to s3,
+makes a join with stations (with administrative areas) and store
+the result back to s3.
 """
 
-# fmt: off
 from airflow import DAG
 from airflow.utils.task_group import TaskGroup
 from airflow.operators.dummy_operator import DummyOperator
@@ -19,7 +17,6 @@ from airflow.operators.python import BranchPythonOperator
 
 import os
 from datetime import datetime, timedelta
-# fmt: on
 
 # defining default arguments
 default_args = {
@@ -35,13 +32,11 @@ default_args = {
 
 # creating the DAG
 with DAG(
-    "local_station_dag",
+    "local_ghcn_dag",
     default_args=default_args,
     description=(
-        "Load remote stations data from ncdc "
-        "to s3 and then create parquet table joining information about "
-        "in which administrative area (contry, city...) the station "
-        "is located."
+        "(Extracts s3 ghcn data loaded from ncdc to s3 and"
+        "makes a join with stations (with administrative areas)."
     ),
     schedule_interval="0 * * * *",
     max_active_runs=1,
@@ -49,7 +44,7 @@ with DAG(
     params={
         "s3fs_conn_id": "local_minio_conn_id",
         "s3_bucket": "dutrajardim-fi",
-        "skip_load_station_data": False,
+        "skip_load_ghcn_data": False,
     },
 ) as dag:
 
@@ -61,24 +56,23 @@ with DAG(
     # PART 1
     # Creating tasks to load data to s3
     # (making it optional in dag run config).
-    with TaskGroup(group_id="load_station_data") as load_station_data:
+    with TaskGroup(group_id="load_ghcn_data") as load_ghcn_data:
         skip = DummyOperator(task_id="skip")
-        data_from_ncdc_to_s3 = LoadToS3Operator(
-            task_id="data_from_ncdc_to_s3",
+        data_from_ghcn_to_s3 = LoadToS3Operator(
+            task_id="data_from_ghcn_to_s3",
             s3fs_conn_id="{{ params.s3fs_conn_id }}",
-            url="ftp://ftp.ncdc.noaa.gov/pub/data/ghcn/daily/ghcnd-stations.txt",
-            pathname="{{ params.s3_bucket }}/src/ncdc/stations.txt.gz",
-            gz_compress=True,
+            url="ftp://ftp.ncdc.noaa.gov/pub/data/ghcn/daily/by_year/{{ dag_run.logical_date.strftime('%Y') }}.csv.gz",
+            pathname="dutrajardim-fi/src/ncdc/ghcn/{{ dag_run.logical_date.strftime('%Y') }}.csv.gz",
         )
         check = BranchPythonOperator(
             task_id="check",
             python_callable=lambda dag_run, **kwargs: (
-                "load_station_data.skip"
+                "load_ghcn_data.skip"
                 if (
-                    "skip_load_station_data" in dag_run.conf
-                    and dag_run.conf["skip_load_station_data"]
+                    "skip_load_ghcn_data" in dag_run.conf
+                    and dag_run.conf["skip_load_ghcn_data"]
                 )
-                else "load_station_data.data_from_ncdc_to_s3"
+                else "load_ghcn_data.data_from_ghcn_to_s3"
             ),
         )
         join = DummyOperator(
@@ -87,51 +81,48 @@ with DAG(
         )
 
         # defining tasks relations in the cur group
-        check >> [data_from_ncdc_to_s3, skip]
-        [data_from_ncdc_to_s3, skip] >> join
+        check >> [data_from_ghcn_to_s3, skip]
+        [data_from_ghcn_to_s3, skip] >> join
 
     # PART 2
     # Loading spark script file to s3.
     # This file is used in the spark context.
     cur_dirname = os.path.dirname(os.path.realpath(__file__))
     spark_script_path = os.path.join(
-        cur_dirname, "pyspark_scripts", "stations_spark_etl.py"
+        cur_dirname, "pyspark_scripts", "ghcn_spark_etl.py"
     )
+
     script_to_s3 = LoadToS3Operator(
-        task_id="load_stations_spark_script_to_s3",
+        task_id="load_ghcn_spark_script_to_s3",
         s3fs_conn_id="{{ params.s3fs_conn_id }}",
         url=f"file://{spark_script_path}",  # local file
-        pathname="{{ params.s3_bucket }}/spark_scripts/stations_spark_etl.py",
+        pathname="{{ params.s3_bucket }}/spark_scripts/ghcn_spark_etl.py",
+        dag=dag,
     )
 
     # PART 3
     # Submitting the spark application to join.
-    # This extracts s3 stations data loaded from ncdc to s3,
-    # makes a spatial join with geo shapes of administrative and
-    # the result table is saved back to S3.
+    # This extracts s3 ghcn data loaded from ncdc to s3 and
+    # makes a join with stations (with administrative areas).
     submit_spark_app = SparkOnK8sAppOperator(
-        task_id="submit_spark_application_join_station_adm",
-        name="stations-spark-script",
-        main_application_file="s3a://{{ params.s3_bucket }}/spark_scripts/stations_spark_etl.py",
+        task_id="submit_spark_application_join_ghcn_adm",
+        name="ghcn-spark-script",
+        main_application_file="s3a://{{ params.s3_bucket }}/spark_scripts/ghcn_spark_etl.py",
         k8s_conn_id="local_k8s_conn_id",
-        spark_app_name="DJ - Station Information",
+        spark_app_name="DJ - GHCN Information",
         s3fs_conn_id="{{ params.s3fs_conn_id }}",
         arguments=[
-            (
-                "--s3-stations-src-path",
-                "s3a://{{ params.s3_bucket }}/src/ncdc/stations.txt.gz",
-            ),
             (
                 "--s3-stations-path",
                 "s3a://{{ params.s3_bucket }}/tables/stations/osm_adm8.parquet",
             ),
             (
-                "--s3-shapes-path",
-                "s3a://{{ params.s3_bucket }}/tables/shapes/osm/shapes.parquet/adm=8",
+                "--s3-ghcn-path",
+                "s3a://{{ params.s3_bucket }}/tables/ghcn/osm_adm8.parquet",
             ),
             (
-                "--s3-relations-path",
-                "s3a://{{ params.s3_bucket }}/tables/shapes/osm/relations.parquet/adm=8",
+                "--s3-ghcn-src-path",
+                "s3a://{{ params.s3_bucket }}/src/ncdc/ghcn/{{ execution_date.strftime('%Y') }}.csv.gz",
             ),
         ],
     )
@@ -139,25 +130,29 @@ with DAG(
     # PART 4
     # creating the quality tests
     with TaskGroup(group_id="run_quality_tests") as run_quality_tests:
+
+        # creating the quality tests
         DataQualityOperator(
             task_id="check_if_data_exists",
             s3fs_conn_id="{{ params.s3fs_conn_id }}",
             sql="""
                 SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END
-                FROM stations
+                FROM ghcn
             """,
             expected_result=1,
-            error_message="The number of stored stations is not greater than 0!",
+            error_message="The number of stored data is not greater than 0!",
             register_s3_tables=[
-                ("stations", "{{ params.s3_bucket }}/tables/stations/osm_adm8.parquet")
+                (
+                    "ghcn",
+                    "{{ params.s3_bucket }}/tables/ghcn/osm_adm8.parquet/*/year={{ execution_date.strftime('%Y') }}/*/*",
+                )
             ],
         )
 
-    # creating a symbolic task to show the DAG end
-    end_operator = DummyOperator(task_id="Stop_execution")
+# creating a symbolic task to show the DAG end
+end_operator = DummyOperator(task_id="Stop_execution", dag=dag)
 
-    # defining tasks relations
-    start_operator >> [load_station_data, script_to_s3]
-    [load_station_data, script_to_s3] >> submit_spark_app
-    submit_spark_app >> run_quality_tests
-    run_quality_tests >> end_operator
+start_operator >> [load_ghcn_data, script_to_s3]
+[load_ghcn_data, script_to_s3] >> submit_spark_app
+submit_spark_app >> run_quality_tests
+run_quality_tests >> end_operator

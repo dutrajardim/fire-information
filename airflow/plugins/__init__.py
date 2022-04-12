@@ -14,6 +14,7 @@ class DutraPlugin(AirflowPlugin):
         operators.ShapefileToParquetOperator,
         operators.SparkOnK8sAppOperator,
         operators.LoadToS3Operator,
+        operators.FirmsOperator,
     ]
     hooks = [hooks.S3fsHook, hooks.KubernetesHook]
     helpers = [helpers.EmrTemplates]

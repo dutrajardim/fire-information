@@ -25,7 +25,7 @@ class DataQualityOperator(BaseOperator):
         expected_result=1,
         register_s3_tables=[],
         *args,
-        **kwargs
+        **kwargs,
     ):
         """
         This function is responsible for instantiating a DataQualityOperator object.
@@ -74,6 +74,7 @@ class DataQualityOperator(BaseOperator):
         """
 
         self.log.info("Running data quality checks...")
+        self.log.info("Prepared SQL: %s" % self.sql)
 
         # requesting a filesystem-like on top of s3
         s3fs = S3fsHook(conn_id=self.s3fs_conn_id)
@@ -84,6 +85,7 @@ class DataQualityOperator(BaseOperator):
 
         # loading each table to memory
         for table_name, s3_path in self.register_s3_tables:
+            self.log.info(f"Prepared path for {table_name}: {s3_path}")
 
             paths = fs.glob(s3_path)
             tmp_path = paths if len(paths) > 1 else paths[0]

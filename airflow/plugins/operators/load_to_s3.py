@@ -1,5 +1,4 @@
 from airflow.models import BaseOperator
-from airflow.exceptions import AirflowSkipException
 from airflow.utils.decorators import apply_defaults
 from hooks.s3fs import S3fsHook
 

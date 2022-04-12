@@ -98,7 +98,7 @@ def extract_stations_data(spark, s3_stations_src_path):
 
 def extract_shapes_data(spark, s3_shapes_path):
     """
-    This stracts shapes table data from s3 and
+    This extracts shapes table data from s3 and
     returns a spatial rdd
 
     Args:
@@ -165,6 +165,7 @@ def spatial_join(spark, rdd_stations, rdd_shapes, max_distance=50000.0):
 
     # converting to dataframe
     sdf_stations_adm = query_result.map(
+        # 0 is stations and 1 is shapes
         lambda pair: [
             pair[0].geom.wkt,
             *pair[0].userData.split("\t"),
@@ -232,7 +233,7 @@ def relations_join(spark, sdf_stations, s3_relations_path):
 
 def load_to_s3(spark, sdf_stations_rel, s3_stations_path):
     """
-    This is responsible for sotoring data back to s3
+    This is responsible for storing data back to s3
 
     Args:
         spark (SparkSession): the spark session
