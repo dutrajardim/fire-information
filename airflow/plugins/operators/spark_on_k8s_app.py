@@ -11,7 +11,9 @@ import functools
 
 class SparkOnK8sAppOperator(BaseOperator):
     """
-    Description:
+    Operator to submit a spark application to a k8s cluster
+    with the spark-on-k8s-operator installed
+    (https://github.com/GoogleCloudPlatform/spark-on-k8s-operator)
     """
 
     # defining operator box background color
@@ -35,6 +37,21 @@ class SparkOnK8sAppOperator(BaseOperator):
         *args,
         **kwargs
     ):
+        """
+
+
+        Args:
+            name (_type_): _description_
+            main_application_file (_type_): _description_
+            k8s_conn_id (_type_): _description_
+            spark_app_name (str, optional): _description_. Defaults to "DJ - Spark Application".
+            s3fs_conn_id (str, optional): _description_. Defaults to "".
+            envs (list, optional): _description_. Defaults to [].
+            arguments (list, optional): _description_. Defaults to [].
+            timeout_seconds (int, optional): _description_. Defaults to 0.
+            wait_timeout_seconds (int, optional): _description_. Defaults to 25.
+            log_path (str, optional): _description_. Defaults to "s3a://spark-logs/events".
+        """
 
         # initializing inheritance
         super(SparkOnK8sAppOperator, self).__init__(*args, **kwargs)
@@ -51,7 +68,10 @@ class SparkOnK8sAppOperator(BaseOperator):
         self.s3fs_conn_id = s3fs_conn_id
 
     def _template_config(self):
-
+        """
+        This function is responsible for configure
+        the default template with the Operator params
+        """
         self.template["spec"]["arguments"] = functools.reduce(
             lambda acc, cur: [*acc, *cur], self.arguments, []
         )
@@ -70,11 +90,20 @@ class SparkOnK8sAppOperator(BaseOperator):
 
     def execute(self, context):
         """
-        Description:
+        This operator submit a SparkApplication object
+        to run a spark etl and listen for the status of
+        this app.
+
+        Args:
+            context (dict): the operator context
+
+        Raises:
+            Exception: raise a error if the application does not complete without errors
         """
 
         self._template_config()
 
+        # getting k8s connection data
         k8s_hook = KubernetesHook(conn_id=self.k8s_conn_id)
         custom_object_api = k8s_hook.get_custom_object_api()
 
@@ -121,6 +150,7 @@ class SparkOnK8sAppOperator(BaseOperator):
 
         args["timeout_seconds"] = self.timeout_seconds
 
+        # watching the application status
         for event in watch.stream(**args):
 
             cur_time = datetime.datetime.now().isoformat()
@@ -145,6 +175,7 @@ class SparkOnK8sAppOperator(BaseOperator):
                                 completed without errors"
                         raise Exception(error_msg)
 
+    # defult params
     template = {
         "apiVersion": "sparkoperator.k8s.io/v1beta2",
         "kind": "SparkApplication",

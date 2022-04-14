@@ -3,3 +3,5 @@
 .vscode
 airflow-cli
 dependencies
+sparkconf.cfg
+notebooks/local_spark.ipynb

@@ -43,11 +43,7 @@ with DAG(
     schedule_interval="0 * * * *",
     max_active_runs=1,
     catchup=False,
-    params={
-        "s3fs_conn_id": "local_minio_conn_id",
-        "s3_bucket": "dutrajardim-fi",
-        "skip_load_station_data": False,
-    },
+    params={"s3fs_conn_id": "local_minio_conn_id", "s3_bucket": "dutrajardim-fi"},
 ) as dag:
 
     dag.__dict__
@@ -87,7 +83,7 @@ with DAG(
         # loading the file to s3
         load_file = LoadToS3Operator(
             task_id="load_file",
-            s3fs_conn_id="local_minio_conn_id",
+            s3fs_conn_id="{{ params.s3fs_conn_id }}",
             url="{{ task_instance.xcom_pull(task_ids='load_latest_firms_data.get_firms_details', key='link') }}",
             gz_compress=True,
             pathname=pathname,
@@ -154,7 +150,7 @@ with DAG(
             sql="""
                 SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END
                 FROM firms
-                WHERE datetime >= STRFTIME('{{(dag_run.logical_date - macros.timedelta(days=2)).strftime('%Y-%m-%d')}}', '%Y-%m-%d')
+                WHERE epoch_ms(datetime) >= '{{(dag_run.logical_date - macros.timedelta(days=2)).strftime('%Y-%m-%d')}}'
             """,
             expected_result=1,
             error_message="The number of stored firms is not greater than 0!",
@@ -171,8 +167,10 @@ with DAG(
             ],
         )
 
+    # creating a symbolic task to show the DAG end
     end_operator = DummyOperator(task_id="end_execution")
 
+    # defining tasks relations
     start_operator >> [load_latest_firms_data, script_to_s3]
     [load_latest_firms_data, script_to_s3] >> submit_spark_app
     submit_spark_app >> run_quality_tests

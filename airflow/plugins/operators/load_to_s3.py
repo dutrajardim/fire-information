@@ -48,7 +48,7 @@ class LoadToS3Operator(BaseOperator):
             pathname_callable (lambda, optional): function that returns a pathname. Defaults to lambda x:x.
             gz_compress (bool, optional): flag to define if the data needs be compressed before saved to s3. Defaults to False.
             unzip (bool, optional): flag to define if is need to unzip the remote file before store it. Defaults to False.
-            unzip_filter (lambda, optional): function that filter unzip files based in filename. Defaults to lambda filename: os.path.basename(filename).
+            unzip_filter (lambda, optional): function that filter files to be extracted based in filename. Defaults to lambda filename: os.path.basename(filename).
         """
 
         # initializing inheritance
@@ -69,7 +69,7 @@ class LoadToS3Operator(BaseOperator):
         This will be executed as the operator is activated.
 
         Args:
-            context (_type_): _description_
+            context (dict): the operator context
         """
 
         s3fs = S3fsHook(conn_id=self.s3fs_conn_id)
@@ -125,7 +125,12 @@ class LoadToS3Operator(BaseOperator):
                 if self.pathname:
                     s3_path = self.pathname
                 else:
-                    callable_params = {"url": url, "filename": filename, "order": order}
+                    callable_params = {
+                        "url": url,
+                        "filename": filename,
+                        "order": order,
+                        "params": context["params"],
+                    }
                     s3_path = self.pathname_callable(**callable_params)
 
                 # saving the file

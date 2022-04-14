@@ -11,7 +11,7 @@ class DutraPlugin(AirflowPlugin):
     name = "dutra_plugin"
     operators = [
         operators.DataQualityOperator,
-        operators.ShapefileToParquetOperator,
+        # operators.ShapefileToParquetOperator,
         operators.SparkOnK8sAppOperator,
         operators.LoadToS3Operator,
         operators.FirmsOperator,

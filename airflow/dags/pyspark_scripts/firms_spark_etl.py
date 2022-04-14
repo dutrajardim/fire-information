@@ -5,7 +5,7 @@ from pyspark.sql.types import (StructType, StructField, StringType)
 
 from sedona.utils.adapter import Adapter
 from sedona.core.enums import (GridType, IndexType)
-from sedona.core.spatialOperator import JoinQuery
+from sedona.core.spatialOperator import JoinQueryRaw
 from sedona.register import SedonaRegistrator
 
 import argparse
@@ -62,16 +62,20 @@ def extract_firms_data(spark, s3_firms_src_path):
     """
     df_firms = spark.read.format("csv").option("header", "true").load(s3_firms_src_path)
 
-    sdf_firms = df_firms.selectExpr(
-        "ST_GeomFromWKT(CONCAT('POINT(', longitude, ' ', latitude, ')')) as geometry",
-        "bright_ti4",
-        "bright_ti5",
-        "frp",
-        "scan",
-        "track",
-        "confidence",
-        "CONCAT(acq_date, ' ', regexp_replace(acq_time, '(.{2}):?(.{2})', '$1:$2')) as datetime",
-        "SUBSTRING(acq_date, 1, 4) as year",
+    sdf_firms = (
+        df_firms.withColumnRenamed("brightness", "bright_ti4")
+        .withColumnRenamed("bright_t31", "bright_ti5")
+        .selectExpr(
+            "ST_GeomFromWKT(CONCAT('POINT(', longitude, ' ', latitude, ')')) as geometry",
+            "bright_ti4",
+            "bright_ti5",
+            "frp",
+            "scan",
+            "track",
+            "confidence",
+            "CONCAT(acq_date, ' ', regexp_replace(acq_time, '(.{2}):?(.{2})', '$1:$2')) as datetime",
+            "SUBSTRING(acq_date, 1, 4) as year",
+        )
     )
 
     return Adapter.toSpatialRdd(sdf_firms, "geometry")
@@ -129,29 +133,25 @@ def spatial_join(spark, rdd_firms, rdd_shapes):
     consider_boundary_intersection = True  # Do not only return geometries fully covered by each query window in rdd_circle
     using_index = False
 
-    query_result = JoinQuery.SpatialJoinQueryFlat(
+    query_result = JoinQueryRaw.SpatialJoinQueryFlat(
         rdd_firms, rdd_shapes, consider_boundary_intersection, using_index
     )
 
     # converting to dataframe
-    sdf_firms_adm = query_result.map(
-        # 0 is shapes and 1 is firms
-        lambda pair: [
-            pair[1].geom.wkt,  # getting right geometry
-            *pair[1].userData.split("\t"),
-            *pair[0].userData.split("\t"),
-        ]
-    ).toDF(
-        StructType(
-            [
-                StructField("geometry", StringType(), False),
-                *[
-                    StructField(name, StringType(), False)
-                    for name in rdd_firms.fieldNames
-                ],
-                StructField("shape_id", StringType(), False),
-            ]
-        )
+    sdf_firms_adm = Adapter.toDf(
+        query_result,
+        ["shape_id"],
+        [
+            "bright_ti4",
+            "bright_ti5",
+            "frp",
+            "scan",
+            "track",
+            "confidence",
+            "datetime",
+            "year",
+        ],
+        spark,
     )
 
     return sdf_firms_adm
@@ -197,7 +197,7 @@ def load_to_s3(spark, sdf_firms_rel, s3_firms_path):
 
     (
         sdf_firms_rel.selectExpr(
-            "geometry",
+            "ST_AsText(rightgeometry) AS geometry",
             "CAST(bright_ti4 as FLOAT)",
             "CAST(bright_ti5 as FLOAT)",
             "CAST(frp as FLOAT)",

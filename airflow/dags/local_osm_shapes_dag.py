@@ -173,6 +173,7 @@ with DAG(
     # creating a symbolic task to show the DAG end
     end_operator = DummyOperator(task_id="stop_execution")
 
+    # defining tasks relations
     start_operator >> [load_shapes_data, script_to_s3]
     [load_shapes_data, script_to_s3] >> submit_spark_app
     submit_spark_app >> run_quality_checks

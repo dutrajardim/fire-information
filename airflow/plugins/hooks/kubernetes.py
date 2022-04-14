@@ -17,11 +17,10 @@ class KubernetesHook(BaseHook):
     def __init__(self, conn_id, *args, **kwargs):
         """
         This function is responsible for instantiating a
-        KubernetesHook object, and expect a conn_id of the
-        type kubernetes setted with the json kube config.
+        KubernetesHook object.
 
         Args:
-            conn_id (kubernetes): id of the airflow connection
+            conn_id (str): id of the airflow connection (Kubernetes connection)
         """
 
         # initializing inheritance

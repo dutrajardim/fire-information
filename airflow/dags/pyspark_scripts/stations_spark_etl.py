@@ -8,7 +8,7 @@ from sedona.register import SedonaRegistrator
 from sedona.utils import (KryoSerializer, SedonaKryoRegistrator)
 from sedona.utils.adapter import Adapter
 from sedona.core.enums import (GridType, IndexType)
-from sedona.core.spatialOperator import JoinQuery
+from sedona.core.spatialOperator import JoinQueryRaw
 from sedona.core.SpatialRDD import CircleRDD
 
 import argparse
@@ -159,46 +159,32 @@ def spatial_join(spark, rdd_stations, rdd_shapes, max_distance=50000.0):
     considerBoundaryIntersection = True  # Do not only return geometries fully covered by each query window in rdd_circle
     usingIndex = False
 
-    query_result = JoinQuery.DistanceJoinQueryFlat(
+    query_result = JoinQueryRaw.DistanceJoinQueryFlat(
         rdd_shapes, rdd_circle, usingIndex, considerBoundaryIntersection
     )
 
-    # converting to dataframe
-    sdf_stations_adm = query_result.map(
-        # 0 is stations and 1 is shapes
-        lambda pair: [
-            pair[0].geom.wkt,
-            *pair[0].userData.split("\t"),
-            *pair[1].userData.split("\t"),
-            pair[0].geom.distance(pair[1].geom),  # calculating distance
-        ]
-    ).toDF(
-        StructType(
-            [
-                StructField("geometry", StringType(), False),
-                StructField("id", StringType(), False),
-                StructField("elevation", StringType(), False),
-                StructField("name", StringType(), False),
-                StructField("shape_id", StringType(), False),
-                StructField("distance", FloatType(), False),
-            ]
-        )
+    # converting to dataframe (left columns are related to stations)
+    sdf_stations_adm = Adapter.toDf(
+        query_result, ["id", "elevation", "name"], ["shape_id"], spark
     )
 
     # calc distance between stations and adm, then select
     # up to 2 or 3 nearest adm area, and transform CRS back to degrees
     return (
         sdf_stations_adm.withColumn(
+            "distance", expr("ST_Distance(leftgeometry, rightgeometry)")
+        )
+        .withColumn(
             "station_rank",
             expr(f"RANK() OVER (PARTITION BY (shape_id) ORDER BY distance)"),
         )
         .where(
             "station_rank < 4"
-        )  # 1 to distance equal 0 if station inside amd area, 2 and 3 for take 2 nearest
+        )  # 1 to distance equal 0 if station inside amd area or first nearest, 2 and 3 for take more 2 nearest
         .withColumn(
             "geometry",
             expr(
-                "ST_FlipCoordinates(ST_Transform(ST_GeomFromWKT(geometry), 'epsg:3857', 'epsg:4326'))"
+                "ST_FlipCoordinates(ST_Transform(leftgeometry, 'epsg:3857', 'epsg:4326'))"
             ),  # transform to degree-based CRS (it is fliping coordinates, so I flip to undo it)
         )
     )

@@ -1,8 +1,8 @@
 """
 # Copy Station Files
 
-This DAG is responsible for extracts s3 ghcn data loaded from ncdc to s3,
-makes a join with stations (with administrative areas) and store
+This DAG is responsible for extracting ghcn data, loading from ncdc to s3,
+making a join with stations (with administrative areas) and storing
 the result back to s3.
 """
 
@@ -35,8 +35,8 @@ with DAG(
     "local_ghcn_dag",
     default_args=default_args,
     description=(
-        "(Extracts s3 ghcn data loaded from ncdc to s3 and"
-        "makes a join with stations (with administrative areas)."
+        "Extracts ghcn data and makes a join"
+        "with it and stations data (with administrative areas)."
     ),
     schedule_interval="0 * * * *",
     max_active_runs=1,
@@ -122,7 +122,7 @@ with DAG(
             ),
             (
                 "--s3-ghcn-src-path",
-                "s3a://{{ params.s3_bucket }}/src/ncdc/ghcn/{{ execution_date.strftime('%Y') }}.csv.gz",
+                "s3a://{{ params.s3_bucket }}/src/ncdc/ghcn/{{ dag_run.logical_date.strftime('%Y') }}.csv.gz",
             ),
         ],
     )
@@ -144,15 +144,16 @@ with DAG(
             register_s3_tables=[
                 (
                     "ghcn",
-                    "{{ params.s3_bucket }}/tables/ghcn/osm_adm8.parquet/*/year={{ execution_date.strftime('%Y') }}/*/*",
+                    "{{ params.s3_bucket }}/tables/ghcn/osm_adm8.parquet/*/year={{ dag_run.logical_date.strftime('%Y') }}/*/*",
                 )
             ],
         )
 
-# creating a symbolic task to show the DAG end
-end_operator = DummyOperator(task_id="Stop_execution", dag=dag)
+    # creating a symbolic task to show the DAG end
+    end_operator = DummyOperator(task_id="Stop_execution")
 
-start_operator >> [load_ghcn_data, script_to_s3]
-[load_ghcn_data, script_to_s3] >> submit_spark_app
-submit_spark_app >> run_quality_tests
-run_quality_tests >> end_operator
+    # defining tasks relations
+    start_operator >> [load_ghcn_data, script_to_s3]
+    [load_ghcn_data, script_to_s3] >> submit_spark_app
+    submit_spark_app >> run_quality_tests
+    run_quality_tests >> end_operator

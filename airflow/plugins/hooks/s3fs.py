@@ -16,7 +16,7 @@ class S3fsHook(BaseHook):
         Others configuration can be setted in the extra param of the airflow connection.
 
         Args:
-            conn_id (s3): airflow connection of the type s3
+            conn_id (str): airflow connection of the type s3
         """
 
         # initializing inheritance

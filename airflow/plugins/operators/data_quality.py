@@ -29,17 +29,8 @@ class DataQualityOperator(BaseOperator):
     ):
         """
         This function is responsible for instantiating a DataQualityOperator object.
-        As the operator object is executed, all data quality check listed in dq_checks arg
-        will be validated with expected result.
-
-        dq_checks example:
-        [
-            {
-                "sql": "SELECT COUNT(*) FROM ex_table",
-                "expected_result": 3,
-                "error_messag": "The count of register in ex_table is different of 3"
-            }
-        ]
+        As the operator object is executed, the sql query result
+        will be validated with expected result arg.
 
         register_s3_tables example:
         [
@@ -47,9 +38,11 @@ class DataQualityOperator(BaseOperator):
         ]
 
         Args:
-            s3fs_conn_id (string): airflow connection of the type S3
-            dq_checks (list): list of dicts with the params sql, expected_result and error_message.
+            s3fs_conn_id (str): airflow connection of the type S3
+            sql (str): a sql query that will return a value to be compared with the expected result
             register_s3_tables (list, optional): list of tables referenced in the sql statement. Default value is a empty list
+            error_message (str, optional): the message of error to be logged. Defaults to "Error during quality test".
+            expected_result (any, optional): a value to be compared with the sql query response. Defaults to 1.
         """
 
         # initializing inheritance
@@ -67,7 +60,7 @@ class DataQualityOperator(BaseOperator):
         This will be executed as the operator is activated.
 
         Args:
-            context (_type_): _description_
+            context (dict): airflow context
 
         Raises:
             ValueError: Error raised when sql statement response is different of expected value.
@@ -84,13 +77,17 @@ class DataQualityOperator(BaseOperator):
         con = duckdb.connect(database=":memory:")
 
         # loading each table to memory
-        for table_name, s3_path in self.register_s3_tables:
+        for table_name, s3_path, *others in self.register_s3_tables:
+            columns = others[0] if len(others) else None
             self.log.info(f"Prepared path for {table_name}: {s3_path}")
 
             paths = fs.glob(s3_path)
             tmp_path = paths if len(paths) > 1 else paths[0]
 
-            con.register(table_name, pq.read_table(tmp_path, filesystem=fs))
+            con.register(
+                table_name,
+                pq.read_table(tmp_path, filesystem=fs, columns=columns),
+            )
 
         record = con.execute(self.sql).fetchone()
         self.log.info("Data quality check returned the value %s." % record[0])
