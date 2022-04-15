@@ -40,7 +40,7 @@ with DAG(
         "to s3 and then create parquet table defining in which"
         "administrative area the fire spot occurred."
     ),
-    schedule_interval="0 * * * *",
+    schedule_interval=None,
     max_active_runs=1,
     catchup=False,
     params={

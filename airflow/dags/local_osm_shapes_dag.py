@@ -38,7 +38,7 @@ with DAG(
     "local_osm_shape_dag",
     default_args=default_args,
     description="Copy shape files from GADM to S3",
-    schedule_interval="0 * * * *",
+    schedule_interval=None,
     max_active_runs=1,
     catchup=False,
     params={

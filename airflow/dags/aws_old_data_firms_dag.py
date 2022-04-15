@@ -16,10 +16,10 @@ from airflow.utils.trigger_rule import TriggerRule
 from operators.data_quality import DataQualityOperator
 from airflow.models import Variable
 
-from airflow.contrib.operators.emr_create_job_flow_operator import EmrCreateJobFlowOperator
-from airflow.contrib.operators.emr_terminate_job_flow_operator import EmrTerminateJobFlowOperator
-from airflow.contrib.operators.emr_add_steps_operator import EmrAddStepsOperator
-from airflow.contrib.sensors.emr_step_sensor import EmrStepSensor
+from airflow.providers.amazon.aws.operators.emr_create_job_flow import EmrCreateJobFlowOperator
+from airflow.providers.amazon.aws.operators.emr_terminate_job_flow import EmrTerminateJobFlowOperator
+from airflow.providers.amazon.aws.operators.emr_add_steps import EmrAddStepsOperator
+from airflow.providers.amazon.aws.sensors.emr_step import EmrStepSensor
 
 from datetime import (datetime, timedelta)
 import os
@@ -49,9 +49,11 @@ with DAG(
     catchup=False,
     params={
         "s3fs_conn_id": "aws_s3_conn_id",
-        "s3_bucket": "dutrajardim-fi",
-        "ec2_subnet_id": "subnet-0d995a0886cc8d7da",
-        "ec2_key_name": "dutrajardim",
+        "s3_bucket": Variable.get("S3_FI_BUCKET", default_var="dutrajardim-fi"),
+        "ec2_subnet_id": Variable.get(
+            "EC2_SUBNET_ID", default_var="subnet-0d995a0886cc8d7da"
+        ),
+        "ec2_key_name": Variable.get("EC2_KEY_NAME", default_var="dutrajardim"),
     },
 ) as dag:
 

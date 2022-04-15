@@ -40,7 +40,7 @@ with DAG(
         "to s3 and then create parquet table defining in which"
         "administrative area the fire spot occurred."
     ),
-    schedule_interval="0 * * * *",
+    schedule_interval=None,
     max_active_runs=1,
     catchup=False,
     params={"s3fs_conn_id": "local_minio_conn_id", "s3_bucket": "dutrajardim-fi"},
@@ -55,11 +55,6 @@ with DAG(
     # Creating tasks to load data to s3
     with TaskGroup(group_id="load_latest_firms_data") as load_latest_firms_data:
 
-        # getting api credential
-        conn = BaseHook.get_connection("firms_token")
-        token = conn.password
-        details_url = conn.host
-
         # Nasa keeps the last two months of daily
         # text files available for download via HTTPS.
         #
@@ -69,7 +64,7 @@ with DAG(
         # (so the text file changes throughout the day).
         get_firms_details = FirmsOperator(
             task_id="get_firms_details",
-            details_url=details_url,
+            firms_conn_id="firms_token",
             date="{{ (dag_run.logical_date - macros.timedelta(days=1)) | ds }}",  # yesterday (YYYY-MM-DD)
         )
 
@@ -87,7 +82,9 @@ with DAG(
             url="{{ task_instance.xcom_pull(task_ids='load_latest_firms_data.get_firms_details', key='link') }}",
             gz_compress=True,
             pathname=pathname,
-            headers={"Authorization": f"Bearer {token}"},
+            headers={
+                "Authorization": "Bearer {{ task_instance.xcom_pull(task_ids='load_latest_firms_data.get_firms_details', key='token') }}"
+            },
         )
 
         get_firms_details >> load_file

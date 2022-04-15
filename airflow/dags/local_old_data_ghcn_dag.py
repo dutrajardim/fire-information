@@ -36,7 +36,7 @@ with DAG(
         "Extracts old ghcn data and makes a join"
         "with it and stations data (with administrative areas)."
     ),
-    schedule_interval="0 * * * *",
+    schedule_interval=None,
     max_active_runs=1,
     catchup=False,
     params={"s3fs_conn_id": "local_minio_conn_id", "s3_bucket": "dutrajardim-fi"},

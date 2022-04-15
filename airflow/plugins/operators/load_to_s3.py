@@ -1,5 +1,4 @@
 from airflow.models import BaseOperator
-from airflow.utils.decorators import apply_defaults
 from hooks.s3fs import S3fsHook
 
 from contextlib import closing
@@ -19,9 +18,8 @@ class LoadToS3Operator(BaseOperator):
     # defining operator box background color
     ui_color = "#7545a1"
 
-    template_fields = ("pathname", "url", "s3fs_conn_id")
+    template_fields = ("pathname", "url", "s3fs_conn_id", "headers")
 
-    @apply_defaults
     def __init__(
         self,
         s3fs_conn_id,

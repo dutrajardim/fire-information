@@ -16,10 +16,10 @@ from airflow.utils.trigger_rule import TriggerRule
 from operators.data_quality import DataQualityOperator
 from airflow.models import Variable
 
-from airflow.contrib.operators.emr_create_job_flow_operator import EmrCreateJobFlowOperator
-from airflow.contrib.operators.emr_terminate_job_flow_operator import EmrTerminateJobFlowOperator
-from airflow.contrib.operators.emr_add_steps_operator import EmrAddStepsOperator
-from airflow.contrib.sensors.emr_step_sensor import EmrStepSensor
+from airflow.providers.amazon.aws.operators.emr_create_job_flow import EmrCreateJobFlowOperator
+from airflow.providers.amazon.aws.operators.emr_terminate_job_flow import EmrTerminateJobFlowOperator
+from airflow.providers.amazon.aws.operators.emr_add_steps import EmrAddStepsOperator
+from airflow.providers.amazon.aws.sensors.emr_step import EmrStepSensor
 
 from datetime import (datetime, timedelta)
 import os
@@ -48,7 +48,7 @@ with DAG(
     catchup=False,
     params={
         "s3fs_conn_id": "aws_s3_conn_id",
-        "s3_bucket": "dutrajardim-fi",
+        "s3_bucket": Variable.get("S3_FI_BUCKET", default_var="dutrajardim-fi"),
         "ec2_subnet_id": "subnet-0d995a0886cc8d7da",
         "ec2_key_name": "dutrajardim",
     },
@@ -59,7 +59,7 @@ with DAG(
     # creating a symbolic task to show the DAG begin
     start_operator = DummyOperator(task_id="begin_execution")
 
-    url = Variable.get("FIRMS_CUSTOM_LINK")
+    url = Variable.get("FIRMS_CUSTOM_LINK", default_var="default_name.csv")
     custom_name, _ = os.path.splitext(os.path.basename(url))
 
     # PART 1

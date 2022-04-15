@@ -16,12 +16,12 @@ from operators.firms import FirmsOperator
 from helpers.emr_templates import EmrTemplates
 from airflow.utils.trigger_rule import TriggerRule
 from operators.data_quality import DataQualityOperator
-from airflow.hooks.base import BaseHook
+from airflow.models import Variable
 
-from airflow.contrib.operators.emr_create_job_flow_operator import EmrCreateJobFlowOperator
-from airflow.contrib.operators.emr_terminate_job_flow_operator import EmrTerminateJobFlowOperator
-from airflow.contrib.operators.emr_add_steps_operator import EmrAddStepsOperator
-from airflow.contrib.sensors.emr_step_sensor import EmrStepSensor
+from airflow.providers.amazon.aws.operators.emr_create_job_flow import EmrCreateJobFlowOperator
+from airflow.providers.amazon.aws.operators.emr_terminate_job_flow import EmrTerminateJobFlowOperator
+from airflow.providers.amazon.aws.operators.emr_add_steps import EmrAddStepsOperator
+from airflow.providers.amazon.aws.sensors.emr_step import EmrStepSensor
 
 from datetime import (datetime, timedelta)
 import os
@@ -48,7 +48,7 @@ with DAG(
     catchup=True,
     params={
         "s3fs_conn_id": "aws_s3_conn_id",
-        "s3_bucket": "dutrajardim-fi",
+        "s3_bucket": Variable.get("S3_FI_BUCKET", default_var="dutrajardim-fi"),
         "skip_load_stations_data": False,
         "skip_load_shapes_data": False,
         "skip_load_ghcn_data": False,
@@ -154,11 +154,6 @@ with DAG(
     # Creating tasks to load data to s3
     with TaskGroup(group_id="load_latest_firms_data") as load_latest_firms_data:
 
-        # getting api credential
-        conn = BaseHook.get_connection("firms_token")
-        token = conn.password
-        details_url = conn.host
-
         # Nasa keeps the last two months of daily
         # text files available for download via HTTPS.
         #
@@ -168,7 +163,7 @@ with DAG(
         # (so the text file changes throughout the day).
         get_firms_details = FirmsOperator(
             task_id="get_firms_details",
-            details_url=details_url,
+            firms_conn_id="firms_token",
             date="{{ (dag_run.logical_date - macros.timedelta(days=1)) | ds }}",  # yesterday (YYYY-MM-DD)
         )
 
@@ -186,7 +181,9 @@ with DAG(
             url="{{ task_instance.xcom_pull(task_ids='load_latest_firms_data.get_firms_details', key='link') }}",
             gz_compress=True,
             pathname=pathname,
-            headers={"Authorization": f"Bearer {token}"},
+            headers={
+                "Authorization": "Bearer {{ task_instance.xcom_pull(task_ids='load_latest_firms_data.get_firms_details', key='token') }}"
+            },
         )
 
         get_firms_details >> load_file
@@ -199,7 +196,7 @@ with DAG(
             task_id="data_from_ghcn_to_s3",
             s3fs_conn_id="{{ params.s3fs_conn_id }}",
             url="ftp://ftp.ncdc.noaa.gov/pub/data/ghcn/daily/by_year/{{ dag_run.logical_date.strftime('%Y') }}.csv.gz",
-            pathname="dutrajardim-fi/src/ncdc/ghcn/{{ dag_run.logical_date.strftime('%Y') }}.csv.gz",
+            pathname="{{ params.s3_bucket }}/src/ncdc/ghcn/{{ dag_run.logical_date.strftime('%Y') }}.csv.gz",
         )
         check = BranchPythonOperator(
             task_id="check",
@@ -486,6 +483,7 @@ with DAG(
                         "{{ (dag_run.logical_date - macros.timedelta(days=2)).strftime('%Y') }}",
                         "{{ (dag_run.logical_date - macros.timedelta(days=2)).month }}",
                     ),
+                    ["datetime"],
                 )
             ],
         )
@@ -497,19 +495,19 @@ with DAG(
             sql="""
                 SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END
                 FROM ghcn
-                WHERE CAST(STRFTIME(datetime,'%Y-%m-%d') AS DATE) >= '{{(dag_run.logical_date - macros.timedelta(days=3)).strftime('%Y-%m-%d')}}'
+                WHERE CAST(STRFTIME(datetime,'%Y-%m-%d') AS DATE) >= '{{(dag_run.logical_date - macros.timedelta(days=7)).strftime('%Y-%m-%d')}}'
             """,
             expected_result=1,
             error_message="The number of stored data is not greater than 0!",
             register_s3_tables=[
                 (
                     "ghcn",
-                    "%s/tables/ghcn/osm_adm8.parquet/*/year=%s/month=%s/*"
+                    "%s/tables/ghcn/osm_adm8.parquet/*/year=%s/*/*"
                     % (
                         "{{ params.s3_bucket }}",
                         "{{ dag_run.logical_date.strftime('%Y') }}",
-                        "{{ (dag_run.logical_date - macros.timedelta(days=2)).month }}",
                     ),
+                    ["datetime"],
                 )
             ],
         )

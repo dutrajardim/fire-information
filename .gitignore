@@ -5,3 +5,5 @@ airflow-cli
 dependencies
 sparkconf.cfg
 notebooks/local_spark.ipynb
+airflow_home
+__pycache__

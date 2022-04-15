@@ -10,9 +10,7 @@ administrative area the fire spot occurred.
 from airflow import DAG
 from airflow.operators.dummy_operator import DummyOperator
 from airflow.utils.task_group import TaskGroup
-from operators.firms import FirmsOperator
 from operators.load_to_s3 import LoadToS3Operator
-from airflow.hooks.base import BaseHook
 from operators.spark_on_k8s_app import SparkOnK8sAppOperator
 from operators.data_quality import DataQualityOperator
 from airflow.models import Variable
@@ -41,7 +39,7 @@ with DAG(
         "to s3 and then create parquet table defining in which "
         "administrative area the fire spot occurred."
     ),
-    schedule_interval="0 * * * *",
+    schedule_interval=None,
     max_active_runs=1,
     catchup=False,
     params={
@@ -55,7 +53,7 @@ with DAG(
     # creating a symbolic task to show the DAG begin
     start_operator = DummyOperator(task_id="begin_execution")
 
-    url = Variable.get("FIRMS_CUSTOM_LINK")
+    url = Variable.get("FIRMS_CUSTOM_LINK", default_var="default_name.csv")
     custom_name, _ = os.path.splitext(os.path.basename(url))
 
     # PART 1

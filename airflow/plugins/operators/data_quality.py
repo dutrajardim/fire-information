@@ -2,7 +2,6 @@ import pyarrow.parquet as pq
 import duckdb
 
 from airflow.models import BaseOperator
-from airflow.utils.decorators import apply_defaults
 from hooks.s3fs import S3fsHook
 
 
@@ -16,7 +15,6 @@ class DataQualityOperator(BaseOperator):
 
     template_fields = ("register_s3_tables", "sql", "s3fs_conn_id")
 
-    @apply_defaults
     def __init__(
         self,
         s3fs_conn_id,

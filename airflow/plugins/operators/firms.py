@@ -1,6 +1,6 @@
 # fmt: off
 from airflow.models import BaseOperator
-from airflow.utils.decorators import apply_defaults
+from airflow.hooks.base import BaseHook
 
 from contextlib import closing
 from urllib.request import (Request, urlopen)
@@ -22,10 +22,9 @@ class FirmsOperator(BaseOperator):
 
     template_fields = ("date",)
 
-    @apply_defaults
     def __init__(
         self,
-        details_url,
+        firms_conn_id,
         date=datetime.now().strftime("%Y-%m-%d"),
         *args,
         **kwargs,
@@ -45,7 +44,7 @@ class FirmsOperator(BaseOperator):
         super(FirmsOperator, self).__init__(*args, **kwargs)
 
         # defining operator properties
-        self.details_url = details_url
+        self.firms_conn_id = firms_conn_id
         self.date = date
 
     def execute(self, context):
@@ -56,8 +55,13 @@ class FirmsOperator(BaseOperator):
             context (dict): airflow context
         """
 
+        # getting api credential
+        conn = BaseHook.get_connection(self.firms_conn_id)
+        token = conn.password
+        details_url = conn.host
+
         ti = context["ti"]
-        req = Request(self.details_url)
+        req = Request(details_url)
 
         # opening the csv
         with closing(urlopen(req)) as resource:
@@ -71,6 +75,7 @@ class FirmsOperator(BaseOperator):
             self.log.info(f"Result: {row}")
 
             # making the returned data accessible for others operators
+            ti.xcom_push(key="token", value=token)
             ti.xcom_push(key="filename", value=os.path.splitext(row["name"])[0])
             ti.xcom_push(key="last_modified", value=row["last_modified"])
             ti.xcom_push(key="mtime", value=row["mtime"])

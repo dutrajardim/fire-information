@@ -43,7 +43,7 @@ with DAG(
         "in which administrative area (contry, city...) the station "
         "is located."
     ),
-    schedule_interval="0 * * * *",
+    schedule_interval=None,
     max_active_runs=1,
     catchup=False,
     params={

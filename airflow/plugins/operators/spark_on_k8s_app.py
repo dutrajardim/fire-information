@@ -1,5 +1,4 @@
 from airflow.models import BaseOperator
-from airflow.utils.decorators import apply_defaults
 from hooks.kubernetes import KubernetesHook
 from airflow.hooks.base import BaseHook
 
@@ -21,7 +20,6 @@ class SparkOnK8sAppOperator(BaseOperator):
 
     template_fields = ("s3fs_conn_id", "arguments", "main_application_file")
 
-    @apply_defaults
     def __init__(
         self,
         name,
