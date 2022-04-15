@@ -159,7 +159,7 @@ $ chmod +x airflow_start.sh
 $ ./airflow_start.sh
 ```
 
-Every time we call airflow command, it will check for the airflow environments variables. So, for export those variables persistently we can run the follow command that will write the variables to the ~/.bashrc file:
+Every time we call airflow command, it will check for the airflow environment variables. So, for export those variables persistently we can run the follow command that will write the variables to the ~/.bashrc file:
 
 ```console
 $ ./set_airflow_env.sh
