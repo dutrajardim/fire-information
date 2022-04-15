@@ -138,7 +138,7 @@ As data increase, for example selecting more countries to download from OSM will
 
 ## Install and start the Airflow standalone environment
 
-Download the project source code with the following commands in the Linux shell console, then install the dependencies and start the airflow server (using python >= 3.5):
+Download the project source code with the following commands in the Linux shell console, then install the dependencies and start the airflow server (using python >= 3.9):
 
 ```console
 $ git clone https://github.com/dutrajardim/fire-information.git
