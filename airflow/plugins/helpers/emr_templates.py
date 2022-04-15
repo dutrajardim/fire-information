@@ -80,15 +80,9 @@ class EmrTemplates:
         """
         template = copy.deepcopy(JOB_FLOW_OVERRIDES)
 
-        if ec2_subnet_id:
-            template["Instances"]["Ec2SubnetId"] = ec2_subnet_id
-
-        if key_name:
-            template["Instances"]["Ec2KeyName"] = key_name
-
-        if bootstrap_actions:
-            template["BootstrapActions"] = bootstrap_actions
-
+        template["Instances"]["Ec2SubnetId"] = ec2_subnet_id
+        template["Instances"]["Ec2KeyName"] = key_name
+        template["BootstrapActions"] = bootstrap_actions
         template["Name"] = name
         template["LogUri"] = log_uri
         template["ReleaseLabel"] = emr_release

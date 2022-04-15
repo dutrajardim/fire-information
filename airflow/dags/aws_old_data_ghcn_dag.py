@@ -75,7 +75,7 @@ with DAG(
                 task_id=f"data_from_ghcn_to_s3_{year}",
                 s3fs_conn_id="{{ params.s3fs_conn_id }}",
                 url=f"ftp://ftp.ncdc.noaa.gov/pub/data/ghcn/daily/by_year/{year}.csv.gz",
-                pathname=f"{{ params.s3_bucket }}/src/ncdc/ghcn/{year}.csv.gz",
+                pathname=f"{'{{ params.s3_bucket }}'}/src/ncdc/ghcn/{year}.csv.gz",
             )
 
     # PART 2

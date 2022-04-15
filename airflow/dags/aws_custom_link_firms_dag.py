@@ -49,8 +49,10 @@ with DAG(
     params={
         "s3fs_conn_id": "aws_s3_conn_id",
         "s3_bucket": Variable.get("S3_FI_BUCKET", default_var="dutrajardim-fi"),
-        "ec2_subnet_id": "subnet-0d995a0886cc8d7da",
-        "ec2_key_name": "dutrajardim",
+        "ec2_subnet_id": Variable.get(
+            "EC2_SUBNET_ID", default_var="subnet-0d995a0886cc8d7da"
+        ),
+        "ec2_key_name": Variable.get("EC2_KEY_NAME", default_var="dutrajardim"),
     },
 ) as dag:
 

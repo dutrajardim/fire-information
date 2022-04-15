@@ -52,6 +52,10 @@ with DAG(
         "skip_load_stations_data": False,
         "skip_load_shapes_data": False,
         "skip_load_ghcn_data": False,
+        "ec2_subnet_id": Variable.get(
+            "EC2_SUBNET_ID", default_var="subnet-0d995a0886cc8d7da"
+        ),
+        "ec2_key_name": Variable.get("EC2_KEY_NAME", default_var="dutrajardim"),
     },
 ) as dag:
     dag.doc_md = __doc__
@@ -263,8 +267,8 @@ with DAG(
         create_cluster = EmrCreateJobFlowOperator(
             task_id="create_cluster",
             job_flow_overrides=emr_templates.get_job_flow_overrides(
-                ec2_subnet_id="subnet-0d995a0886cc8d7da",  # it grants EMR access to S3
-                key_name="dutrajardim",
+                ec2_subnet_id="{{ params.ec2_subnet_id }}",  # it grants EMR access to S3
+                key_name="{{ params.ec2_key_name }}",
                 bootstrap_actions=[  # install python apache sedona in the cluster
                     {
                         "Name": "Install dependencies",
