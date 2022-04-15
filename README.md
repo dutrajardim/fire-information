@@ -8,6 +8,8 @@
 - Exploring and assessing the data 
 - The data model and the ETL process
 - Example of analysis and technologies used
+  - The database needed to be accessed by 100+ people
+  - The pipelines would be run on a daily basis by 7 am every day and data increases by 100x
 - Project structure
 - How to install and execute the ETL (standalone airflow)
 
