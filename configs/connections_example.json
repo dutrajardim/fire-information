@@ -33,7 +33,7 @@
       "extra": {
          "extra__kubernetes__cluster_context": "",
          "extra__kubernetes__in_cluster": "False",
-         "extra__kubernetes__kube_config": "",
+         "extra__kubernetes__kube_config": "{\"kind\":\"Config\",\"apiVersion\":\"v1\",\"preferences\":{},\"clusters\":[{\"name\":\"microk8s-cluster\",\"cluster\":{\"server\":\"https://192.168.100.38:16443\",\"certificate-authority-data\":\"LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUREekNDQWZlZ0F3SUJBZ0lVVzFtVmFYNjhXRmJGTGNzRW5Jc3FtQllMUkFzd0RRWUpLb1pJaHZjTkFRRUwKQlFBd0Z6RVZNQk1HQTFVRUF3d01NVEF1TVRVeUxqRTRNeTR4TUI0WERUSXhNRGd4T0RFNU1EYzFOMW9YRFRNeApNRGd4TmpFNU1EYzFOMW93RnpFVk1CTUdBMVVFQXd3TU1UQXVNVFV5TGpFNE15NHhNSUlCSWpBTkJna3Foa2lHCjl3MEJBUUVGQUFPQ0FROEFNSUlCQ2dLQ0FRRUFwNk5aaFYyUXRBM29uaGMxK05FRmFxTGJHYkd2ckpkV01zTWsKOVJnN1ZtMG85Mkh6cGhRakt0YW1xZGFMMHpISy82L3Y0eS9IMGxwMTBmYW03NUNjbjl3SUNBcTlIdlBtQ3BRQgppbEUxdUZhcTNLV2tBUm9qellhODh6b1lJWU1HbVd2enBiUGZrckxKeUU4amp5QzFsOTFwTWpZS21tcEwxZm9GClQyQkNNMTE0YzU2NTA2TU1paGxmRDlMVE9tQjl2eEJUTHpWczZTZ3grd2E4ZnFCUzJRcFA5dXJOdm52SnF5V04KNHJ2SHJWeUROZ2Y0OG9OU2tIeHFLRVRMQS9KY0dDMjcrU2tGZHdndHhhWTJWL1FnRklCZEIwUU1JcmljWWxXSwpycnlpVXEwZUJOZ2lJRERESERpRWJKZkZzakdPcWVIeGlxcmRrV0lIZlplYTFBV3EyUUlEQVFBQm8xTXdVVEFkCkJnTlZIUTRFRmdRVWtKaE1rRHB6Wk96dVVEdnlhTEVnWER0ZE5ENHdId1lEVlIwakJCZ3dGb0FVa0poTWtEcHoKWk96dVVEdnlhTEVnWER0ZE5ENHdEd1lEVlIwVEFRSC9CQVV3QXdFQi96QU5CZ2txaGtpRzl3MEJBUXNGQUFPQwpBUUVBVnVkaDdaUWoxaks1K1JCbjVrdGNLSUM5eS9SVDQveHlhc1BrdFN5M0ZTMFdhSTBucGtwNXZtWEw3MkNNCkEveW5GQ3BieDNFemM2a1JmT1pYQ2E5Y0d5SUlTNDBFeSsranRiYzQ0d1NUN0ZlYmRpTktGMjNlc2Z2aTNSa1QKb25ybjlNbThqZDNacElycU9RS2JtUWxZbm1ITExPUjZwWGpadDBMUEJwaEdzVVFrZWsrR2NoYXFqd2ZBWDRwZAp6Q3ZpNUY5WE1Ub25LTEJYN2RVSUhpWmliVS9ndE94TnIzMEtOQTBSQ1pqRVFLdGFMQkEwQVB5c3V4TitMYVJICnZRK2dQdWViZFdobjM3YmQwRmNIaHpZeklvYlJYbktjNWtnRi8reFhsTlFDVWdHaTcwUmpkT1A5RlhYSGgzODMKREEyei84SnRkSmJGSUl3NWhJQW42U3VId0E9PQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==\"}}],\"users\":[{\"name\":\"admin\",\"user\":{\"token\":\"OHVYSWhabXlFdHNwbnhYKzV6N0FoSmJ4SEs5OWR3ektybE5ETXRYQUQ0UT0K\"}}],\"contexts\":[{\"name\":\"microk8s\",\"context\":{\"cluster\":\"microk8s-cluster\",\"user\":\"admin\"}}],\"current-context\":\"microk8s\"}",
          "extra__kubernetes__kube_config_path": "",
          "extra__kubernetes__namespace": ""
       }
@@ -42,7 +42,7 @@
       "conn_type": "s3",
       "description": "Params used for minio local connection.",
       "login": "admin",
-      "password": "",
+      "password": "6bd71ace-8866-407a-9bcc-714bc5753f18",
       "host": "https://minio.minio-tenant",
       "port": "443",
       "extra": "{\"client_kwargs\": {\"verify\": false}}"
