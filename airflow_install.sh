@@ -1,5 +1,6 @@
 # !/bin/bash
 
+export AIRFLOW_HOME=~/airflow
 
 # Install Airflow using the constraints file
 AIRFLOW_VERSION=2.2.5
@@ -10,6 +11,6 @@ CONSTRAINT_URL="https://raw.githubusercontent.com/apache/airflow/constraints-${A
 pip install "apache-airflow==${AIRFLOW_VERSION}" --constraint "${CONSTRAINT_URL}" 
 
 # project dependencies
-pip install s3fs==2022.2.0 pyarrow==7.0.0 duckdb==0.3.2 kubernetes apache-airflow-providers-amazon pache-airflow-providers-cncf-kubernetes
+pip install s3fs==2022.2.0 pyarrow==7.0.0 duckdb==0.3.2 kubernetes apache-airflow-providers-amazon apache-airflow-providers-cncf-kubernetes
 
 
