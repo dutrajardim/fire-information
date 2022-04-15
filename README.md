@@ -125,10 +125,19 @@ The detailed description of the GHCN attributes fields (source) can be founded [
 
 # Example of analysis and technologies used
 
-Some examples/results of queries that can be done are in the [notebooks folder](https://github.com/dutrajardim/fire-information/tree/main/notebooks). For that was used pyarrow to load the parquet files from S3 to local computer memory, and then used DuckDB for analysis. As the analysis need to be executed in more data (more partitions), a best solution would be to use another tools like PrestoDB and AWS Athena (AWS Glue can also help) in a AWS environment. \
-Amazon S3 offer a virtually unlimited scalability, so the infrastructure of data lake will be increased as we use it as well the costs. Other solutions are available as [MINIO](https://min.io/) that also offer a horizontally scale of the infra through a concept called [Server Pools](https://min.io/product/scalable-object-storage). \
-For Amazon Athena there are some limitations ([quotas](https://docs.aws.amazon.com/athena/latest/ug/service-limits.html)) that are applied mainly per account or per query. For example we can call the APIs GetQueryExecution and GetQueryResults up to 100 times per second without the burst capacity.
-As data increase, for example selecting more countries to download from OSM will result an increase in the daily join task, we can also scale horizontally the EMR cluster.
+Some examples/results of queries that can be done are in the [notebooks folder](https://github.com/dutrajardim/fire-information/tree/main/notebooks). For that was used pyarrow to load the parquet files from S3 to local computer memory, and then used DuckDB for analysis. As the analysis need to be executed in more data (more partitions), a best solution would be to use another tools like PrestoDB and AWS Athena (AWS Glue can also help) in a AWS environment.
+
+## Support for horizontal scale
+
+### The database needed to be accessed by 100+ people
+
+Amazon S3 offer a virtually unlimited scalability, and we can leverage a content distribution network (CDN) service on AWS to scale further by caching and serving the frequently requested content from 50+ edge location around the globe. So the data can be access by 100+ people. \
+Other solutions are available as [MINIO](https://min.io/) that also offer a horizontally scale of the infra through a concept called [Server Pools](https://min.io/product/scalable-object-storage) and can be launched in EC2 instances, but this solution is harder to scale. \
+For Amazon Athena there are some limitations ([quotas](https://docs.aws.amazon.com/athena/latest/ug/service-limits.html)) that are applied mainly per account or per query. For example we can call the APIs GetQueryExecution and GetQueryResults up to 100 times per second without the burst capacity. This solution is very attractive when we point that there is no need for download the data before the analysis, everything will be running on Amazon and then we need to get just the result (download the summary of the data).
+
+### The pipelines would be run on a daily basis by 7 am every day and data increases by 100x
+
+As data increases, for example selecting more countries to download from OSM, will result in an increase in the daily join task and so in the time taken by the scripts to complete the DAG execution. To guarantee that the data will be available when we need it, we can easily increase the number of executors in the EMR Cluster. 
 
 # Project structure
 
