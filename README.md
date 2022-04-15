@@ -162,5 +162,6 @@ $ airflow variables import configs/variables.json
 
 To start the dag:
 ```console
+$ airflow dags unpause aws_emr_dag
 $ airflow dags trigger aws_emr_dag
 ```

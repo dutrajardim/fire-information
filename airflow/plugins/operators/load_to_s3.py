@@ -75,10 +75,11 @@ class LoadToS3Operator(BaseOperator):
 
         url = self.url
         self.log.info(f"Downloading from: {url}")
+        self.log.info(self.headers)
         req = Request(url, headers=self.headers)
-
         with closing(urlopen(req)) as resource:
 
+            self.log.info("Prepering file stream")
             file_streams = []
 
             # if unzip is set to True, the src_stream will be
@@ -132,6 +133,7 @@ class LoadToS3Operator(BaseOperator):
                     s3_path = self.pathname_callable(**callable_params)
 
                 # saving the file
+                self.log.info("Saving the file")
                 s3_file = fs.open(s3_path, "wb")
                 s3_file.write(out_stream.read())
                 s3_file.close()

@@ -77,7 +77,8 @@ with DAG(
             gz_compress=True,
             pathname=pathname,
             headers={
-                "Authorization": "Bearer {{ task_instance.xcom_pull(task_ids='load_latest_firms_data.get_firms_details', key='token') }}"
+                "Authorization": "Bearer {{ task_instance.xcom_pull(task_ids='load_firms_data.get_firms_details', key='token') }}",
+                "User-Agent": "Mozilla/6.0",
             },
         )
 
