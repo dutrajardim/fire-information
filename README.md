@@ -138,6 +138,14 @@ As data increase, for example selecting more countries to download from OSM will
 
 ## Install and start the Airflow standalone environment
 
+To create a virtual environment with conda, run the following commands:
+
+```console
+$ conda create myenv python=3.9
+$ ..
+$ conda activate myenv
+```
+
 Download the project source code with the following commands in the Linux shell console, then install the dependencies and start the airflow server (using python >= 3.9):
 
 ```console
@@ -151,9 +159,15 @@ $ chmod +x airflow_start.sh
 $ ./airflow_start.sh
 ```
 
+Every time we call airflow command, it will check for the airflow environments variables. So, for export those variables persistently we can run the follow command that will write the variables to the ~/.bashrc file:
+
+```console
+$ ./set_airflow_env.sh
+``` 
+
 ## Configure and running the ETL
 
-Fill in the configuration files in the config folder and run the follow commands.
+Fill in the configuration files in the config folder and run the follow commands. Make sure to execute the commands with the same python environment used in the airflow installation.
 
 ```console
 $ airflow connections import configs/connections.json 
