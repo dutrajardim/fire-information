@@ -1,4 +1,6 @@
 {
     "FIRMS_CUSTOM_LINK": "https://firms.modaps.eosdis.nasa.gov/data/download/DL_FIRE_SV-C2_262505.zip",
-    "S3_FI_BUCKET": "dutrajardim-fi"
+    "S3_FI_BUCKET": "dutrajardim-fi",
+    "EC2_SUBNET_ID": "subnet-0d995a0886cc8d7da",
+    "EC2_KEY_NAME": "dutrajardim"
 }
