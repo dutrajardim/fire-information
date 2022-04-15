@@ -72,10 +72,12 @@ The image below show how the ETLs process store the files (Data Lake Structure).
 
 ### Data dictionary
 
-The detailed description of the firms attribute source fields can be founded [here](https://earthdata.nasa.gov/earth-observation-data/near-real-time/firms/v1-vnp14imgt#ed-viirs-375m-attributes).
+The detailed description of the firms attributes fields (source) can be founded [here](https://earthdata.nasa.gov/earth-observation-data/near-real-time/firms/v1-vnp14imgt#ed-viirs-375m-attributes).
+
+The detailed description of the GHCN attributes fields (source) can be founded [here](https://www1.ncdc.noaa.gov/pub/data/ghcn/daily/readme.txt)
 
 - firms/osm_adm8.parquet
-  - geometry - Point (CRS epsg:4326) in WKT (Well Know Text representation of geometry)
+  - geometry - Point (CRS epsg:4326) of the fire spot in WKT (Well Know Text representation of geometry)
   - bright_ti4 - VIIRS I-4 channel brightness temperature of the fire pixel measured in Kelvin.
   - bright_ti5 - I-5 Channel brightness temperature of the fire pixel measured in Kelvin.
   - frp - FRP depicts the pixel-integrated fire radiative power in MW (megawatts).
@@ -90,19 +92,24 @@ The detailed description of the firms attribute source fields can be founded [he
   - adm[n] - The id of the administrative level N of the OSM organization
   - adm[n]_name - The id of the administrative level N of the OSM organization
 - ghcn/osm_adm8.parquet
-  - station
-  - element
-  - measurement_flag
-  - quality_flag
-  - source_flag
-  - value
-  - datetime
-  - distance_from_station
+  - station - The station identification code.
+  - element - The element type. There are five core elements as well as a number of addition elements. The five core elements are: PRCP = Precipitation (tenths of mm); SNOW = Snowfall (mm); SNWD = Snow depth (mm); TMAX = Maximum temperature (tenths of degrees C); TMIN = Minimum temperature (tenths of degrees C).
+  - measurement_flag - The measurement flag (e.g. B = precipitation total formed from two 12-hour totals).
+  - quality_flag - The quality flag (e.g. W = temperature too warm for snow)
+  - source_flag - The source flag (e.g. C = Environment Canada)
+  - value - The value of the measurement.
+  - datetime - The datetime of the observation.
+  - distance_from_station - Distance from the adm to the station (0 when the station is inside of the administrative area).
   - adm - The id of the administrative level 8 of the OSM organization (For Brazil is city but it can vary from country to country)
   - adm_name - The name of the administrative level 8 of the OSM organization 
   - adm[n] - The id of the administrative level N of the OSM organization
   - adm[n]_name - The id of the administrative level N of the OSM organization
 - stations/osm_adm8.parquet
+  - id - The station identification code.
+  - geometry - Point (CRS epsg:4326) indicating the station locations in WKT (Well Know Text representation of geometry)
+  - name - Name of the stations
+  - elevation - The elevation of the station (in meters, missing = -999.9)
+  - distance - Distance from the adm to the station (0 when the station is inside of the administrative area).
   - adm - The id of the administrative level 8 of the OSM organization (For Brazil is city but it can vary from country to country)
   - adm_name - The name of the administrative level 8 of the OSM organization 
   - adm[n] - The id of the administrative level N of the OSM organization
