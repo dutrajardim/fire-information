@@ -1,26 +1,40 @@
 @startsalt
 {
 {T!
-+                                   | Table type    | Partition             | Extension
-+ s3://dutrajardim-fi               | .             | .                     | .
-++ src                              | .             | .                     | .
-+++ shapes                          | .             | .                     | .
-++++ gadm40                         | .             | [adm, country]        | shp
-+++ firms                           | .             | .                     | .
-++++ suomi_viirs_c2                 | .             | .                     | .
-+++++ archive                       | .             | year                  | csv.gz
-+++ ncdc                            | .             | .                     | .
-++++ stations                       | .             | .                     | txt.gz (fwf)
-++++ ghcn                           | .             | year                  | csv.gz
-++ tables                           | .             | .                     | .
-+++ shapes                          | .             | .                     | .
-++++ adm0.parquet                   | Dimension     | .                     | parquet
-++++ adm1.parquet                   | Dimension     | adm0                  | parquet
-++++ adm2.parquet                   | Dimension     | [adm0, adm1]          | parquet
-++++ adm3.parquet                   | Dimension     | [adm0, adm1]          | parquet
-+++ stations                        | Dimension     | adm0                  | parquet
-+++ firms.parquet                   | Fact          | [adm0, adm1, year]    | parquet
-+++ precipitation.parquet           | Fact          | [adm0, adm1, year]    | parquet
++                                   | Type              | Description          
++ s3://dutrajardim-fi               | bucket            | .             
+++ spark_scripts                    | .                 | .   
++++ bootstrap-actions.sh            | bash              | shell script to install python dependencies 
++++ firms_spark_etl.py              | python            | spatial join to show in which adm area each fire spot is located
++++ ghcn_spark_etl.py               | python            | join ghcn records with stations
++++ osm_shapes_spark_etl.py         | python            | extracts shapes and adm relations between shapes
++++ stations_spark_etl.py           | python            | spatial join to show in which adm area each station is located
+++ src                              | .                 | folder of files loaded from the remote dataset             
++++ firms/suomi_viirs_c2            | .                 | folder of data from VIIRS instrument
+++++ 2022                           | .                 | folder of daily text files (yearly)
++++++ suomi_[yearday].csv.gz        | csv.gz            | .
+++++ archive/[year]                 | .                 | folder of archive files from firms (yearly)
++++++ viirs_[country].csv.gz        | csv.gz            | csv files extracted from the zip archive
+++++ custom/[filename]              | .                 | .
++++++ [filename].csv.gz             | csv.gz            | file loaded from custom request links 
++++ ncdc                            | .                 | .       
+++++ stations                       | txt.gz            | fixed width format file with metadata about stations             
+++++ ghcn                           | .                 | folder of yearly data of ghcn
++++++ [year].csv.gz                 | csv.gz            | .
++++ shapes/osm/adm_2_8              | .                 | folder of files of OSM with adm areas of level from 2 to 8
+++++ ARG.ewkt.gz                    | json.gz           | json file with a geometry column as WKT
+++++ BRA.ewkt.gz                    | json.gz           | json file with a geometry column as WKT
+++ tables                           | .                 | .
++++ firms                           |                   | .
+++++ osm_adm8.parquet               | parquet           | table of fire spots with shapes boundaries (OSM 8)
++++ gchn                            |                   | .
+++++ osm_adm8.parquet               | parquet           | table of ghcn data with shapes reference (OSM 8)
++++ stations                        |                   | .
+++++ osm_adm8.parquet               | parquet           | table of stations with shapes reference (OSM 8)
++++ shapes/osm                      | .                 | .
+++++ relations.parquet              | parquet           | define relations of boundaries shapes (ex. Minas Gerais is in Brazil)
+++++ shapes.parquet                 | parquet           | table of shapes (id and WKT geometry)
 }    
 }
 @endsalt
+

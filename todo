@@ -1,8 +1,0 @@
-1 - save all data in epsg:4326 crs
-2 - understand why there is a lot of stations in Minas Gerais but only a few station's data available
-3 - spark scripts need to be configurable from dags
-
-4 - try to keep load callables input and output similar
-5 - try to convert load callables in operator
-6 - see if keep k8s templates inside k8s operator makes code cleaner
-7 - make load to s3 paralleled and configurable with jinja

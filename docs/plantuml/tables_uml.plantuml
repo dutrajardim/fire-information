@@ -1,0 +1,97 @@
+@startuml
+
+package Metadata {
+
+    class "shapes (adm=n)" {
+        id
+        geometry
+    }
+
+
+    class "relations (adm=n)" {
+        id
+        name
+        adm2
+        adm2_name
+        adm3
+        adm3_name
+        .
+        .
+        .
+        adm[n-1]
+        adm[n-1]_name
+    }
+
+
+    class "stations/oms_adm8" {
+        id
+        geometry
+        name
+        elevation
+        distance
+        adm
+        adm_name
+        adm1
+        adm1_name
+        .
+        .
+        .
+        adm7
+        adm7_name
+    }
+
+}
+
+package "Fact Tables" #02c1cf {
+
+    class "ghcn/oms_adm8" {
+        station
+        element
+        measurement_flag
+        quality_flag
+        source_flag
+        value
+        datetime
+        distance_from_station
+        adm
+        adm_name
+        adm1
+        adm1_name
+        .
+        .
+        .
+        adm7
+        adm7_name
+    }
+
+    class "firms/oms_adm8" {
+        geometry
+        bright_ti4
+        bright_ti5
+        frp
+        scan
+        track
+        confidence
+        datetime
+        year
+        month
+        adm
+        adm_name
+        adm1
+        adm1_name
+        .
+        .
+        .
+        adm7
+        adm7_name
+    }
+}
+
+
+"shapes (adm=n)" .down. "relations (adm=n)"
+"shapes (adm=n)" .down. "stations/oms_adm8"
+"shapes (adm=n)" .up. "ghcn/oms_adm8"
+"shapes (adm=n)" .up. "firms/oms_adm8"
+
+
+@enduml

@@ -1,11 +1,13 @@
 ### Table of content
 
-- What you will find here (The Project Scope)
-- Explore and Assess the Data (The Project Scope)
-- The ETL process and the data model
+- What you will find here (project scope)
+- Exploring and assessing the data 
+- The data model and the ETL process
+- Examples of analysis
 - Project structure
+- How to install and execute the ETL (standalone airflow)
 
-# What you will find here
+# What you will find here (project scope)
 
 In this repository I wrote some Airflow DAGs (Directed Acyclic Graph) scripts to gather data from manifold datasets of related subjects, process and store the data creating a data lake that integrates those data to support analysis on them. \
 Considering that the main organizations distributes their resources by administrative areas, the major goal of this project is to make possible compare historical events as wild fire and flood by administrative areas.
@@ -17,7 +19,7 @@ Considering that the main organizations distributes their resources by administr
 - Fire Information for Resource Management System (FIRMS)
 - Administrative boundaries from Open Street Map databases (OSM-Boundaries)
 
-# Exploring and Assessing the Data
+# Exploring and assessing the data
 
 ### Global Historical Climatology Network daily (GHCNd)
 
@@ -28,12 +30,12 @@ The paper [An Overview of the Global Historical Climatology Network-Daily Databa
 
 The query used to plot this chart is available in the [Stations Analysis Notebook](https://github.com/dutrajardim/fire-information/blob/main/notebooks/stations_analysis.ipynb).
 
-To see the repository of the GHCN dataset, you can follow [this link](https://www1.ncdc.noaa.gov/pub/data/ghcn/daily/). This project extracts the data by file transfer protocol, and makes use of **by year** csv file that is describe in the [README](https://www1.ncdc.noaa.gov/pub/data/ghcn/daily/by_year/readme-by_year.txt) file in the dataset repository.  
+To see the repository of the GHCN dataset, you can follow [this link](https://www1.ncdc.noaa.gov/pub/data/ghcn/daily/). This project extracts the data by file transfer protocol, and makes use of **by year** csv file that is describe in the [README](https://www1.ncdc.noaa.gov/pub/data/ghcn/daily/by_year/readme-by_year.txt) on the NCEI's repository.  
 
 ### Fire Information for Resource Management System (FIRMS)
 
 This dataset makes available Near Real-Time (NRT) active fire and thermal anomalies data within 3 hours of satellite observation from the Moderate Resolution Imaging Spectroradiometer (MODIS) and the Visible Infrared Imaging Radiometer Suite (VIIRS) instruments. \
-The [Firms FAG](https://earthdata.nasa.gov/faq/firms-faq#ed-user-guides) describes the available data and how to download it. In this project was created a dag that extract data older then two months (archive data) by requesting a link throughout the [FIRMS form](https://firms.modaps.eosdis.nasa.gov/download/create.php), this link need to be set as an Airflow Variable. Another dag was created to download daily text files for the last two months via HTTPS and depends on a token to access the data. This both dags extract old data and is expected to be executed once. \
+The [Firms FAG](https://earthdata.nasa.gov/faq/firms-faq#ed-user-guides) describes the available data and how to download it. In this project was created a dag that extract data older then two months (archive data) by requesting a link by the [FIRMS form](https://firms.modaps.eosdis.nasa.gov/download/create.php), this link need to be set as an Airflow Variable. Another dag was created to download daily text files for the last two months via HTTPS and depends on a token to access the data. This both dags extract old data and is expected to be executed once. \
 The major dag of this project, that is executed daily, also makes use of the token as a requirement of the FIRMS dataset.
 The chart below shows a example of the data extracted from this datasets and the query is available in the [Firms Analysis Notebook](https://github.com/dutrajardim/fire-information/blob/main/notebooks/firms_analysis.ipynb).
 
@@ -41,7 +43,80 @@ The chart below shows a example of the data extracted from this datasets and the
 
 ### Administrative boundaries from Open Street Map databases (OSM-Boundaries)
 
-OSM Boundaries is a project aimed to make easily to extract administrative boundaries such as country boarders or equivalents from the OpenStreetMaps databases. An user account of [OpenStreetMap](https://www.openstreetmap.org/user/new) is required to download the data, and so is a token to execute the DAGs of this project. Geo shapes extracted from this dataset are used here to connect the data through administrative areas, so then we can create queries using this shapes.
-Different sources make up the dataset, so we can expect that some events (for example, fire spots) can be duplicated on join process, as the location of the event can be within those overlapping shapes boundaries.
+OSM Boundaries is aimed to make easily to extract administrative boundaries such as country boarders or equivalents from the OpenStreetMaps databases. An user account of [OpenStreetMap](https://www.openstreetmap.org/user/new) is required to download the data, and so is a token to execute the DAGs of this project. Geo shapes extracted from the OSM dataset are used here to connect the data through administrative areas, so then we can create queries using this shapes references.
+Different sources make up the dataset, so we can expect that some events (for example, fire spots) can be duplicated on processes like a join, as the location of an event can be within the overlapping shapes boundaries.
 
-## The ETL process and the data model
+## The data model and the ETL process
+
+### Data model
+
+The image below shows how the data is saved after gathered from the datasets and processed. \
+In this schema there is two fact table, and the idea is to concentrate the queries on them avoiding loads of join while we can select the columns and partitions we need before each analysis, as the data is saved as parquet files (columnar) in an object storage.
+
+![Data Model UML](docs/images/umls/tables_uml.png "Data Model UML")
+
+Both fact tables and the stations table are created based on one level of administrative area (e.g. adm8 that is country level in the OSM levels structure). The table shapes contains all boundaries levels and is partitioned by them (adm=n), for example, if we need cities shapes we can select the partition adm=8, and for countries shapes the partition is adm=2. This organization makes it possible to use other administrative boundaries databases as [GADM](https://gadm.org/) that is based in up to four administrative levels. So, for each level of fact tables we must configure the etl params to generate them, and at this moment just one is configured for use OSM dataset with adm8 (country).
+
+### The ETL process
+
+The main DAG (aws_emr_dag) is expect to be executed daily to extract the most recent data. \
+The first part is responsible for load the remote data to s3 storage, and considering that the frequency of updates of some of the used datasets are not daily (e.g. OSM Boundaries), these process can be individually configured to be skipped, so Airflow will show in the history of execution when the updates were skipped. \
+The second and third part (transforming and saving the data) occurs in a EMR cluster, the spark scripts are executed as steps of the cluster created during this process and after that the cluster is closed. \
+The last part is the quality check test. The airflow operator used here makes use of the [DuckDB](https://duckdb.org/) to run sql queries on the s3 storage.
+
+![AWS EMR DAG](docs/images/charts/../dags/aws_emr_dag.svg "AWS EMR DAG")
+
+The image below show how the ETLs process store the files (Data Lake Structure).
+
+![Data Lake UML](docs/images/umls/s3_uml.png "Data Lake UML")
+
+### Data dictionary
+
+The detailed description of the firms attribute source fields can be founded [here](https://earthdata.nasa.gov/earth-observation-data/near-real-time/firms/v1-vnp14imgt#ed-viirs-375m-attributes).
+
+- firms/osm_adm8.parquet
+  - geometry - Point (CRS epsg:4326) in WKT (Well Know Text representation of geometry)
+  - bright_ti4 - VIIRS I-4 channel brightness temperature of the fire pixel measured in Kelvin.
+  - bright_ti5 - I-5 Channel brightness temperature of the fire pixel measured in Kelvin.
+  - frp - FRP depicts the pixel-integrated fire radiative power in MW (megawatts).
+  - scan - The algorithm produces approximately 375 m pixels at nadir. Scan and track reflect actual pixel size.
+  - track - The algorithm produces approximately 375 m pixels at nadir. Scan and track reflect actual pixel size.
+  - confidence - This value is based on a collection of intermediate algorithm quantities used in the detection process.
+  - datetime - Datetime of VIIRS acquisition.
+  - year - Year of acquisition (used as partition)
+  - month - Month of acquisition (used as partition)
+  - adm - The id of the administrative level 8 of the OSM organization (For Brazil is city but it can vary from country to country)
+  - adm_name - The name of the administrative level 8 of the OSM organization 
+  - adm[n] - The id of the administrative level N of the OSM organization
+  - adm[n]_name - The id of the administrative level N of the OSM organization
+- ghcn/osm_adm8.parquet
+  - station
+  - element
+  - measurement_flag
+  - quality_flag
+  - source_flag
+  - value
+  - datetime
+  - distance_from_station
+  - adm - The id of the administrative level 8 of the OSM organization (For Brazil is city but it can vary from country to country)
+  - adm_name - The name of the administrative level 8 of the OSM organization 
+  - adm[n] - The id of the administrative level N of the OSM organization
+  - adm[n]_name - The id of the administrative level N of the OSM organization
+- stations/osm_adm8.parquet
+  - adm - The id of the administrative level 8 of the OSM organization (For Brazil is city but it can vary from country to country)
+  - adm_name - The name of the administrative level 8 of the OSM organization 
+  - adm[n] - The id of the administrative level N of the OSM organization
+  - adm[n]_name - The id of the administrative level N of the OSM organization
+- shapes
+  - id - Id of the shape defined by OSM.
+  - geometry - Polygon (CRS epsg:4326) in WKT (Well Know Text representation of geometry).
+  - adm - The id of the administrative level 8 of the OSM organization.
+
+# Example of analysis
+
+explain the tool used and about presto
+examples are in the notebooks
+
+# Project structure
+
+# How to install and execute the ETL (standalone airflow)

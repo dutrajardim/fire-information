@@ -7,3 +7,6 @@ sparkconf.cfg
 notebooks/local_spark.ipynb
 airflow_home
 __pycache__
+configs/*
+!configs/connections_example.json
+!configs/variables_example.json
