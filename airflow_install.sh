@@ -10,7 +10,6 @@ CONSTRAINT_URL="https://raw.githubusercontent.com/apache/airflow/constraints-${A
 # For example: https://raw.githubusercontent.com/apache/airflow/constraints-2.2.5/constraints-3.6.txt
 pip install "apache-airflow==${AIRFLOW_VERSION}" --constraint "${CONSTRAINT_URL}" 
 
-# project dependencies
 pip install s3fs==2022.2.0 pyarrow==7.0.0 duckdb==0.3.2 kubernetes apache-airflow-providers-amazon apache-airflow-providers-cncf-kubernetes
 
 
