@@ -1,9 +1,13 @@
+# [Fire Information](https://github.com/dutrajardim/fire-information)
+
+[Github Link - Rafael Dutra Jardim](https://github.com/dutrajardim/fire-information)
+
 ### Table of content
 
 - What you will find here (project scope)
 - Exploring and assessing the data 
 - The data model and the ETL process
-- Examples of analysis
+- Example of analysis and technologies used
 - Project structure
 - How to install and execute the ETL (standalone airflow)
 
@@ -119,11 +123,44 @@ The detailed description of the GHCN attributes fields (source) can be founded [
   - geometry - Polygon (CRS epsg:4326) in WKT (Well Know Text representation of geometry).
   - adm - The id of the administrative level 8 of the OSM organization.
 
-# Example of analysis
+# Example of analysis and technologies used
 
-explain the tool used and about presto
-examples are in the notebooks
+Some examples/results of queries that can be done are in the [notebooks folder](https://github.com/dutrajardim/fire-information/tree/main/notebooks). For that was used pyarrow to load the parquet files from S3 to local computer memory, and then used DuckDB for analysis. As the analysis need to be executed in more data (more partitions), a best solution would be to use another tools like PrestoDB and AWS Athena (AWS Glue can also help) in a AWS environment. \
+Amazon S3 offer a virtually unlimited scalability, so the infrastructure of data lake will be increased as we use it as well the costs. Other solutions are available as [MINIO](https://min.io/) that also offer a horizontally scale of the infra through a concept called [Server Pools](https://min.io/product/scalable-object-storage). \
+For Amazon Athena there are some limitations ([quotas](https://docs.aws.amazon.com/athena/latest/ug/service-limits.html)) that are applied mainly per account or per query. For example we can call the APIs GetQueryExecution and GetQueryResults up to 100 times per second without the burst capacity.
+As data increase, for example selecting more countries to download from OSM will result an increase in the daily join task, we can also scale horizontally the EMR cluster.
 
 # Project structure
 
+![Project Structure](docs/images/umls/project_uml.png "Project Structure")
+
 # How to install and execute the ETL (standalone airflow)
+
+## Install and start the Airflow standalone environment
+
+Download the project source code with the following commands in the Linux shell console, then install the dependencies and start the airflow server (using python >= 3.5):
+
+```console
+$ git clone https://github.com/dutrajardim/fire-information.git
+$ ...
+$ cd fire-information
+$ chmod +x airflow_install.sh
+$ ./airflow_install.sh
+$ ...
+$ chmod +x airflow_start.sh
+$ ./airflow_start.sh
+```
+
+## Configure and running the ETL
+
+Fill in the configuration files in the config folder and run the follow commands.
+
+```console
+$ airflow connections import configs/connections.json 
+$ airflow variables import configs/variables.json
+```
+
+To start the dag:
+```console
+$ airflow dags trigger aws_emr_dag
+```

@@ -1,6 +1,5 @@
 # !/bin/bash
 
-export AIRFLOW_HOME="$PWD/airflow_home"
 
 # Install Airflow using the constraints file
 AIRFLOW_VERSION=2.2.5
